@@ -79,13 +79,15 @@ def plot_distributions_by_plate(df, value='logMFI'):
 
 
 def plot_banana_plots(df, x, y):
+    print(df.bc_type.unique())
     g = px.scatter(data_frame=df,
                    color='bc_type',
                    facet_col='prism_replicate',
                    facet_col_wrap=3,
                    x=x,
                    y=y,
-                   hover_data=['ccle_name'])
+                   hover_data=['ccle_name'],
+                   width=1000)
     g.update_traces(marker={'size': 4},
                     opacity=0.7)
     x_line = (6, 15)
@@ -108,7 +110,7 @@ def plot_banana_plots(df, x, y):
         # keep the original annotations and add a list of new annotations:
         annotations=list(g.layout.annotations) +
                     [go.layout.Annotation(
-                        x=-0.1,
+                        x=-0.05,
                         y=0.5,
                         font=dict(
                             size=14
@@ -138,5 +140,16 @@ def plot_banana_plots(df, x, y):
                     )
                     ]
     )
+    st.plotly_chart(g, use_container_width=False)
 
-    st.plotly_chart(g, use_container_width=True)
+def plot_med_mad(df):
+    g = px.scatter(data_frame=df,
+                   x='ctl_vehicle_md',
+                   y='ctl_vehicle_mad',
+                   color='pass',
+                   marginal_x='histogram',
+                   marginal_y='histogram',
+                   hover_data=['ccle_name','pool_id'],
+                   height=700)
+    g.update_traces(marker=dict(opacity=0.5))
+    st.plotly_chart(g)

@@ -48,7 +48,7 @@ if fs.exists(build_path):
 
     # pivoted level for poscon/negcon comparison
 
-    control_df = mfi_out.pipe(df_transform.pivot_dmso_bort)
+    control_df = mfi_out.pipe(df_transform.pivot_dmso_bort) # breaking things
     control_df = control_df.merge(qc_out,
                                   on=['prism_replicate',
                                       'ccle_name',
@@ -99,8 +99,8 @@ if fs.exists(build_path):
             plate = tab_labels[n]
             n += 1
             plotting_functions.plot_banana_plots(control_df[control_df.pert_plate == plate],
-                                                 x='logMFI_DMSO',
-                                                 y='logMFI_Bortezomib')
+                                                 x='ctl_vehicle_med',
+                                                 y='trt_poscon_med')
 
     st.header('Banana plots normalized')
     tab_labels = control_df.pert_plate.unique().tolist()
@@ -110,6 +110,14 @@ if fs.exists(build_path):
             plate = tab_labels[n]
             n += 1
             plotting_functions.plot_banana_plots(control_df[control_df.pert_plate == plate],
-                                                 x='logMFI_norm_DMSO',
-                                                 y='logMFI_norm_Bortezomib')
+                                                 x='ctl_vehicle_med_norm',
+                                                 y='trt_poscon_med_norm')
 
+    st.header('Medmad plots')
+    tab_labels = qc_out.pert_plate.unique().tolist()
+    n = 0
+    for pert_plate in st.tabs(tab_labels):
+        with pert_plate:
+            plate = tab_labels[n]
+            n +=1
+            plotting_functions.plot_med_mad(qc_out[qc_out.pert_plate == plate])
