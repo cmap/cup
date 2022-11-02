@@ -16,6 +16,14 @@ base_path = Path(__file__)
 
 st.set_page_config(layout='wide')
 
+hide_table_row_index = """
+            <style>
+            thead tr th:first-child {display:none}
+            tbody th {display:none}
+            </style>
+            """
+st.markdown(hide_table_row_index, unsafe_allow_html=True) # hide table indices while displayed
+
 # get build information
 
 build = "PREP_C_PR500_GOOD"  # testing, will need to get from URL eventually
@@ -23,7 +31,7 @@ build = "PREP_C_PR500_GOOD"  # testing, will need to get from URL eventually
 # aws fs setup
 fs = s3fs.S3FileSystem(anon=False)
 build_path = "s3://macchiato.clue.io/builds/" + build + "/build/"
-print("Build path is: " + build_path)
+#print("Build path is: " + build_path)
 
 # USER INPUTS
 
@@ -31,11 +39,11 @@ if fs.exists(build_path):
     # inputs
 
     qc_path = '~/Desktop/PSELL_PR300P_GOOD/PSELL_PR300P_GOOD_QC_TABLE.csv'  # read qc file
-    print(qc_path)
+    print('QC path is: ' + qc_path)
     qc = pd.read_csv(qc_path)
 
     mfi_path = '~/Desktop/PSELL_PR300P_GOOD/PSELL_PR300P_GOOD_LEVEL3_LMFI.csv'  # read lvl3 lmfi file
-    print(mfi_path)
+    print('MFI path is: ' + mfi_path)
     mfi = pd.read_csv(mfi_path)
 
     # transform mfi dataframe
@@ -74,6 +82,21 @@ if fs.exists(build_path):
     with ssmd:
         plotting_functions.plot_ssmd(qc_out)
 
+    st.header('Dynamic range & error rate')
+    tab_labels = qc_out.pert_plate.unique().tolist()
+    n = 0
+    for pert_plate in st.tabs(tab_labels):
+        with pert_plate:
+            plate = tab_labels[n]
+            n += 1
+            data = qc_out[qc_out.pert_plate == plate]
+            plotting_functions.plot_ssmd_error_rate(data)
+
+    st.subheader('Pass/Fail')
+    pass_fail = df_transform.generate_pass_fail_tbl(mfi=mfi_out,
+                                                    qc=qc_out)
+    st.table(pass_fail)
+
     st.header('Build distributions')
     mfi_raw, mfi_norm = st.tabs(['Raw', 'Normalized'])
     with mfi_raw:
@@ -91,7 +114,7 @@ if fs.exists(build_path):
             data = mfi_out[mfi_out.pert_plate == plate]
             plotting_functions.plot_distributions_by_plate(data)
 
-    st.header('Banana plots raw')
+    st.header('Banana plots (raw)')
     tab_labels = control_df.pert_plate.unique().tolist()
     n = 0
     for pert_plate in st.tabs(tab_labels):
@@ -102,7 +125,7 @@ if fs.exists(build_path):
                                                  x='ctl_vehicle_med',
                                                  y='trt_poscon_med')
 
-    st.header('Banana plots normalized')
+    st.header('Banana plots (normalized)')
     tab_labels = control_df.pert_plate.unique().tolist()
     n = 0
     for pert_plate in st.tabs(tab_labels):
@@ -113,7 +136,7 @@ if fs.exists(build_path):
                                                  x='ctl_vehicle_med_norm',
                                                  y='trt_poscon_med_norm')
 
-    st.header('Medmad plots')
+    st.header('Liver plots')
     tab_labels = qc_out.pert_plate.unique().tolist()
     n = 0
     for pert_plate in st.tabs(tab_labels):

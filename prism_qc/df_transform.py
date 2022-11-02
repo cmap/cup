@@ -1,3 +1,10 @@
+# setup
+import pandas as pd
+
+dr_threshold = 1.8
+er_threshold = 0.05
+
+
 def add_pass_rates(df):
     pass_rates = df[df['pass'] == True][['pass', 'prism_replicate', 'culture', 'pert_plate']].groupby(
         ['prism_replicate', 'culture', 'pert_plate']).count().reset_index()
@@ -68,8 +75,30 @@ def pivot_dmso_bort(df):
         bort_mad_norm, on=merge_cols)
 
     res = out.merge(out_norm, on=merge_cols)
-    print(res.columns)
     return res
 
-#def add_pass_to_control_df(df, qc=qc_out):
-#        cols = ['']
+
+def generate_pass_fail_tbl(mfi, qc):
+    df = mfi.merge(qc, on=['prism_replicate', 'ccle_name', 'pert_plate'])
+    res = pd.DataFrame(
+        columns=['prism_replicate', 'pert_plate', 'Pass', 'Fail both', 'Fail error rate', 'Fail dynamic range'])
+    for plate in df.prism_replicate.unique():
+        pert_plate = df[df.prism_replicate == plate]['pert_plate'].unique()[0]
+        n_samples = df[df.prism_replicate == plate].shape[0]
+        fail_dr = int((df.loc[(df.prism_replicate == plate) & (df.dr < dr_threshold) & (
+                    df.error_rate <= er_threshold)].shape[0] / n_samples) * 100)
+        fail_both = int((df.loc[(df.prism_replicate == plate) & (df.dr < dr_threshold) & (
+                    df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
+        pass_both = int((df.loc[(df.prism_replicate == plate) & (df.dr >= dr_threshold) & (
+                    df.error_rate <= er_threshold)].shape[0] / n_samples) * 100)
+        fail_er = int((df.loc[(df.prism_replicate == plate) & (df.dr >= dr_threshold) & (
+                    df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
+        to_append = {'prism_replicate': plate,
+                     'pert_plate': pert_plate,
+                     'Pass': pass_both,
+                     'Fail both': fail_both,
+                     'Fail error rate': fail_er,
+                     'Fail dynamic range': fail_dr}
+        tmp_df = pd.DataFrame(data=to_append, index=[0])
+        res = pd.concat([res, tmp_df])
+    return res

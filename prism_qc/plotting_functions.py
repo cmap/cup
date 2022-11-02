@@ -1,3 +1,4 @@
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.express as px
@@ -5,12 +6,10 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 
-
 def plot_dynamic_range(df):
     g = px.ecdf(data_frame=df,
                 x='dr',
-                color='prism_replicate',
-                title='Dynamic range')
+                color='prism_replicate')
     g.add_vline(1.8, line_color='red', line_dash='dash')
     g.update_layout(
         xaxis_title="Dynamic range",
@@ -79,7 +78,6 @@ def plot_distributions_by_plate(df, value='logMFI'):
 
 
 def plot_banana_plots(df, x, y):
-    print(df.bc_type.unique())
     g = px.scatter(data_frame=df,
                    color='bc_type',
                    facet_col='prism_replicate',
@@ -149,7 +147,23 @@ def plot_med_mad(df):
                    color='pass',
                    marginal_x='histogram',
                    marginal_y='histogram',
-                   hover_data=['ccle_name','pool_id'],
+                   hover_data=['ccle_name','pool_id','prism_replicate'],
                    height=700)
     g.update_traces(marker=dict(opacity=0.5))
     st.plotly_chart(g)
+
+
+def plot_ssmd_error_rate(df):
+    g = px.scatter(data_frame=df,
+                   facet_col='prism_replicate',
+                   facet_col_wrap=3,
+                   color= 'pass',
+                   x='dr',
+                   y='error_rate',
+                   hover_data=['ccle_name'])
+    g.add_vline(x=1.8, line_color='red', line_dash='dash')
+    g.add_hline(y=0.05, line_color='red', line_dash='dash')
+    g.update_traces(marker={'size': 4},
+                    opacity=0.7)
+    g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+    st.plotly_chart(g, use_container_width=True)
