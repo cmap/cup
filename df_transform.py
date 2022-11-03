@@ -89,10 +89,22 @@ def pivot_dmso_bort(df):
 
 
 def generate_pass_fail_tbl(mfi, qc):
-    df = mfi.merge(qc, on=['prism_replicate', 'ccle_name', 'pert_plate'])
+    mfi_drop_cols = ['logMFI',
+                     'logMFI_norm',
+                     'pert_type',
+                     'replicate']
+    qc_drop_cols = ['ssmd',
+                    'nnmd',
+                    'pool_id',
+                    'pass']
+
+    df = mfi.drop(columns=mfi_drop_cols).merge(qc.drop(columns=qc_drop_cols), on=['prism_replicate', 'ccle_name', 'pert_plate', 'culture'])
+
     res = pd.DataFrame(
-        columns=['prism_replicate', 'pert_plate', 'Pass', 'Fail both', 'Fail error rate', 'Fail dynamic range'])
+        columns=['prism_replicate', 'pert_plate', 'culture', 'Pass',
+                 'Fail both', 'Fail error rate', 'Fail dynamic range'])
     for plate in df.prism_replicate.unique():
+        culture = df[df.prism_replicate == plate]['culture'].unique()[0]
         pert_plate = df[df.prism_replicate == plate]['pert_plate'].unique()[0]
         n_samples = df[df.prism_replicate == plate].shape[0]
         fail_dr = int((df.loc[(df.prism_replicate == plate) & (df.dr < dr_threshold) & (
@@ -105,6 +117,7 @@ def generate_pass_fail_tbl(mfi, qc):
                     df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
         to_append = {'prism_replicate': plate,
                      'pert_plate': pert_plate,
+                     'culture': culture,
                      'Pass': pass_both,
                      'Fail both': fail_both,
                      'Fail error rate': fail_er,
