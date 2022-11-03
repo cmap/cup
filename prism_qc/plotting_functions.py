@@ -97,7 +97,7 @@ def plot_banana_plots(df, x, y, height):
     x_line = (6, 15)
     g.add_trace(go.Scatter(x=x_line,
                            y=x_line,
-                           line=dict(color='black',
+                           line=dict(color='#d65f5f',
                                      dash='dash',
                                      width=1),
                            marker=dict(size=0.1),
@@ -132,8 +132,8 @@ def plot_ssmd_error_rate(df, height):
                    y='error_rate',
                    hover_data=['ccle_name', 'pool_id'],
                    height=height)
-    g.add_vline(x=1.8, line_color='red', line_dash='dash')
-    g.add_hline(y=0.05, line_color='red', line_dash='dash')
+    g.add_vline(x=1.8, line_color='#d65f5f', line_dash='dash')
+    g.add_hline(y=0.05, line_color='#d65f5f', line_dash='dash')
     g.update_traces(marker={'size': 4},
                     opacity=0.7)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
