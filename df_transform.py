@@ -89,10 +89,11 @@ def pivot_dmso_bort(df):
 
 
 def generate_pass_fail_tbl(mfi, qc):
-    df = mfi.merge(qc, on=['prism_replicate', 'ccle_name', 'pert_plate'])
+    df = mfi.merge(qc, on=['prism_replicate', 'ccle_name', 'pert_plate','culture'])
     res = pd.DataFrame(
-        columns=['prism_replicate', 'pert_plate', 'Pass', 'Fail both', 'Fail error rate', 'Fail dynamic range'])
+        columns=['prism_replicate', 'pert_plate', 'culture', 'Pass', 'Fail both', 'Fail error rate', 'Fail dynamic range'])
     for plate in df.prism_replicate.unique():
+        culture = df[df.prism_replicate == plate]['culture'].unique()[0]
         pert_plate = df[df.prism_replicate == plate]['pert_plate'].unique()[0]
         n_samples = df[df.prism_replicate == plate].shape[0]
         fail_dr = int((df.loc[(df.prism_replicate == plate) & (df.dr < dr_threshold) & (
@@ -105,6 +106,7 @@ def generate_pass_fail_tbl(mfi, qc):
                     df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
         to_append = {'prism_replicate': plate,
                      'pert_plate': pert_plate,
+                     'culture': culture,
                      'Pass': pass_both,
                      'Fail both': fail_both,
                      'Fail error rate': fail_er,
@@ -112,3 +114,15 @@ def generate_pass_fail_tbl(mfi, qc):
         tmp_df = pd.DataFrame(data=to_append, index=[0])
         res = pd.concat([res, tmp_df])
     return res
+
+
+def color_background(df):
+    odds = list(df.x.unique()[1::2])
+    c = "background-color: lightgrey"
+    # condition
+    m = df["x"].isin(odds)
+    # DataFrame of styles
+    df1 = pd.DataFrame('', index=df.index, columns=df.columns)
+    # set columns by condition
+    df1 = df1.mask(m, c)
+    return df1.drop(columns=['x'])

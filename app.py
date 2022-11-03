@@ -29,8 +29,8 @@ st.markdown(hide_table_row_index, unsafe_allow_html=True)  # hide table indices 
 
 build = "PREP_C_PR500_GOOD"  # testing, will need to get from URL eventually
 
-qc_file = st.file_uploader('Upload your qc table here', type='csv')
-mfi_file = st.file_uploader('Upload your mfi table here', type='csv')
+qc_file = st.file_uploader('Upload your QC table here', type='csv')
+mfi_file = st.file_uploader('Upload your logMFI (lvl3) table here', type='csv')
 
 run = st.button('Run')
 
@@ -99,7 +99,15 @@ if qc_file and mfi_file and run:
         st.subheader('Pass/Fail')
         pass_fail = df_transform.generate_pass_fail_tbl(mfi=mfi_out,
                                                         qc=qc_out)
-        st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
+
+        pass_fail['x'] = pass_fail['pert_plate'] + pass_fail['culture']
+
+        st.table(pass_fail.reset_index(drop=True).style.hide_columns(['x']).apply(df_transform.color_background,
+                                                                                  axis=None, subset=['prism_replicate',
+                                                                                                     'pert_plate',
+                                                                                                     'culture',
+                                                                                                     'x']).bar(
+            subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
             subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
 
         st.header('Banana plots (raw)')
