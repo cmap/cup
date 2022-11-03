@@ -10,8 +10,11 @@ er_threshold = 0.05
 def add_pass_rates(df):
     pass_rates = df[df['pass'] == True][['pass', 'prism_replicate', 'culture', 'pert_plate']].groupby(
         ['prism_replicate', 'culture', 'pert_plate']).count().reset_index()
-    n_total_lines = df['ccle_name'].unique().shape[0]
-    pass_rates['pct_pass'] = ((pass_rates['pass'] / n_total_lines) * 100).astype(int)
+    n_instances = df[['pass', 'prism_replicate', 'culture', 'pert_plate']].groupby(
+        ['prism_replicate', 'culture', 'pert_plate']).count().reset_index().rename(
+        columns={'pass':'n_instances'})
+    pass_rates = pass_rates.merge(n_instances, on=['prism_replicate', 'culture', 'pert_plate'])
+    pass_rates['pct_pass'] = ((pass_rates['pass'] / pass_rates['n_instances']) * 100).astype(int)
     res = df.merge(pass_rates[['prism_replicate', 'pct_pass']], on=['prism_replicate'])
     return res
 
