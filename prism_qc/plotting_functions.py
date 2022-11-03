@@ -1,7 +1,7 @@
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-
+import plotly.figure_factory as ff
 
 
 def plot_dynamic_range(df):
@@ -14,7 +14,6 @@ def plot_dynamic_range(df):
         yaxis_title=""
     )
     st.plotly_chart(g)
-
 
 
 def plot_ssmd(df):
@@ -30,7 +29,6 @@ def plot_ssmd(df):
     st.plotly_chart(g, use_container_width=True)
 
 
-
 def plot_pass_rates_by_plate(df):
     g = px.histogram(data_frame=df,
                      x='prism_replicate',
@@ -44,7 +42,6 @@ def plot_pass_rates_by_plate(df):
     st.plotly_chart(g, use_container_width=False)
 
 
-
 def plot_pass_rates_by_pool(df):
     g = px.histogram(data_frame=df,
                      x='pool_id',
@@ -52,7 +49,6 @@ def plot_pass_rates_by_pool(df):
                      histfunc='count',
                      color='pass')
     st.plotly_chart(g, use_container_width=True)
-
 
 
 def plot_distributions(df, value='logMFI'):
@@ -65,20 +61,23 @@ def plot_distributions(df, value='logMFI'):
     st.plotly_chart(g)
 
 
-
 def plot_distributions_by_plate(df, height, value='logMFI'):
-    g = px.histogram(data_frame=df,
+    data = df
+    controls = ['prism invariant 1', 'prism invariant 6', 'prism invariant 10']
+    data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle'), 'pert_type'] = \
+    data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle')]['ccle_name']
+    g = px.histogram(data_frame=data,
                      color='pert_type',
                      x=value,
                      barmode='overlay',
                      histnorm='percent',
                      facet_col='prism_replicate',
                      facet_col_wrap=3,
-                     height=height)
+                     height=height,
+                     nbins=100)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     g.update_layout(yaxis_title='')
     st.plotly_chart(g, use_container_width=True)
-
 
 
 def plot_banana_plots(df, x, y, height):
@@ -107,7 +106,6 @@ def plot_banana_plots(df, x, y, height):
     st.plotly_chart(g, use_container_width=False)
 
 
-
 def plot_liver_plots(df):
     g = px.scatter(data_frame=df,
                    x='ctl_vehicle_md',
@@ -119,8 +117,8 @@ def plot_liver_plots(df):
                    height=700,
                    facet_col='culture')
     g.update_traces(marker=dict(opacity=0.5))
+    g.for_each_xaxis(lambda xaxis: xaxis.update(showticklabels=True))
     st.plotly_chart(g, use_container_width=True)
-
 
 
 def plot_ssmd_error_rate(df, height):
