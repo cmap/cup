@@ -1,0 +1,4 @@
+pandas==1.4.4
+plotly==5.9.0
+s3fs==2022.1.0
+streamlit==1.11.0
