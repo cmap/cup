@@ -1,10 +1,8 @@
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import plotly.express as px
-import streamlit as st
-import numpy as np
 import plotly.graph_objects as go
+import streamlit as st
+
+
 
 def plot_dynamic_range(df):
     g = px.ecdf(data_frame=df,
@@ -18,18 +16,19 @@ def plot_dynamic_range(df):
     st.plotly_chart(g)
 
 
+
 def plot_ssmd(df):
-    left_range = int(df.ssmd.min() - 2)
     data = df.sort_values('prism_replicate')
     g = px.histogram(data, x='ssmd',
                      color='prism_replicate',
-                     nbins=int(data.pert_plate.unique().shape[0]*25),
+                     nbins=int(data.pert_plate.unique().shape[0] * 25),
                      hover_data=['ccle_name'],
                      facet_col='pert_plate',
                      facet_col_wrap=2,
                      barmode='overlay')
     g.add_vline(x=-2, line_color='red', line_dash='dash', line_width=3)
     st.plotly_chart(g, use_container_width=True)
+
 
 
 def plot_pass_rates_by_plate(df):
@@ -39,10 +38,11 @@ def plot_pass_rates_by_plate(df):
                      histfunc='avg',
                      color='pert_plate',
                      hover_data=['pct_pass'])
-    g.update_layout(yaxis_range=[0,100],
+    g.update_layout(yaxis_range=[0, 100],
                     yaxis_title='Percent pass',
                     xaxis_title='')
     st.plotly_chart(g, use_container_width=False)
+
 
 
 def plot_pass_rates_by_pool(df):
@@ -52,6 +52,7 @@ def plot_pass_rates_by_pool(df):
                      histfunc='count',
                      color='pass')
     st.plotly_chart(g, use_container_width=True)
+
 
 
 def plot_distributions(df, value='logMFI'):
@@ -64,20 +65,23 @@ def plot_distributions(df, value='logMFI'):
     st.plotly_chart(g)
 
 
-def plot_distributions_by_plate(df, value='logMFI'):
+
+def plot_distributions_by_plate(df, height, value='logMFI'):
     g = px.histogram(data_frame=df,
                      color='pert_type',
                      x=value,
                      barmode='overlay',
                      histnorm='percent',
                      facet_col='prism_replicate',
-                     facet_col_wrap=3)
+                     facet_col_wrap=3,
+                     height=height)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     g.update_layout(yaxis_title='')
     st.plotly_chart(g, use_container_width=True)
 
 
-def plot_banana_plots(df, x, y):
+
+def plot_banana_plots(df, x, y, height):
     g = px.scatter(data_frame=df,
                    color='bc_type',
                    facet_col='prism_replicate',
@@ -85,7 +89,9 @@ def plot_banana_plots(df, x, y):
                    x=x,
                    y=y,
                    hover_data=['ccle_name'],
-                   width=1000)
+                   width=1000,
+                   height=height)
+    g.update_yaxes(matches=None, showticklabels=True)
     g.update_traces(marker={'size': 4},
                     opacity=0.7)
     x_line = (6, 15)
@@ -98,47 +104,9 @@ def plot_banana_plots(df, x, y):
                            showlegend=False),
                 row='all', col='all', exclude_empty_subplots=True)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-
-    for axis in g.layout:
-        if type(g.layout[axis]) == go.layout.YAxis:
-            g.layout[axis].title.text = ''
-        if type(g.layout[axis]) == go.layout.XAxis:
-            g.layout[axis].title.text = ''
-    g.update_layout(
-        # keep the original annotations and add a list of new annotations:
-        annotations=list(g.layout.annotations) +
-                    [go.layout.Annotation(
-                        x=-0.05,
-                        y=0.5,
-                        font=dict(
-                            size=14
-                        ),
-                        showarrow=False,
-                        text="logMFI_norm_bortezomib",
-                        textangle=-90,
-                        xref="paper",
-                        yref="paper"
-                    )
-                    ]
-    )
-    g.update_layout(
-        # keep the original annotations and add a list of new annotations:
-        annotations=list(g.layout.annotations) +
-                    [go.layout.Annotation(
-                        x=0.5,
-                        y=-0.15,
-                        font=dict(
-                            size=14
-                        ),
-                        showarrow=False,
-                        text="logMFI_norm_DMSO",
-                        textangle=0,
-                        xref="paper",
-                        yref="paper"
-                    )
-                    ]
-    )
     st.plotly_chart(g, use_container_width=False)
+
+
 
 def plot_med_mad(df):
     g = px.scatter(data_frame=df,
@@ -147,20 +115,22 @@ def plot_med_mad(df):
                    color='pass',
                    marginal_x='histogram',
                    marginal_y='histogram',
-                   hover_data=['ccle_name','pool_id','prism_replicate'],
+                   hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
                    height=700)
     g.update_traces(marker=dict(opacity=0.5))
     st.plotly_chart(g)
 
 
-def plot_ssmd_error_rate(df):
+
+def plot_ssmd_error_rate(df, height):
     g = px.scatter(data_frame=df,
                    facet_col='prism_replicate',
                    facet_col_wrap=3,
-                   color= 'pass',
+                   color='pass',
                    x='dr',
                    y='error_rate',
-                   hover_data=['ccle_name'])
+                   hover_data=['ccle_name', 'pool_id'],
+                   height=height)
     g.add_vline(x=1.8, line_color='red', line_dash='dash')
     g.add_hline(y=0.05, line_color='red', line_dash='dash')
     g.update_traces(marker={'size': 4},
