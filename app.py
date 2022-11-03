@@ -53,17 +53,13 @@ if qc_file and mfi_file and run:
         mfi = pd.read_csv(mfi_file, usecols=mfi_cols)
 
         # transform mfi dataframe
-        print(mfi.prism_replicate.unique())
         mfi_out = mfi.pipe(df_transform.add_bc_type)
-        print(mfi_out.prism_replicate.unique())
         # transform qc dataframe
 
         qc_out = qc.pipe(df_transform.add_pass_rates)
 
         # pivoted level for poscon/negcon comparison
-        print(mfi.prism_replicate.unique())
         control_df = mfi_out.pipe(df_transform.pivot_dmso_bort)
-        print(control_df.prism_replicate.unique())
         control_df = control_df.merge(qc_out,
                                       on=['prism_replicate',
                                           'ccle_name',
