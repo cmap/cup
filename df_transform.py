@@ -6,7 +6,6 @@ dr_threshold = 1.8
 er_threshold = 0.05
 
 
-@st.cache(suppress_st_warning=True)
 def add_pass_rates(df):
     pass_rates = df[df['pass'] == True][['pass', 'prism_replicate', 'culture', 'pert_plate']].groupby(
         ['prism_replicate', 'culture', 'pert_plate']).count().reset_index()
@@ -19,14 +18,12 @@ def add_pass_rates(df):
     return res
 
 
-@st.cache(suppress_st_warning=True)
 def add_bc_type(df):
     df.loc[df.pool_id == 'CTLBC', 'bc_type'] = 'control'
     df.loc[df.pool_id != 'CTLBC', 'bc_type'] = 'cell_line'
     return df
 
 
-@st.cache(suppress_st_warning=True)
 def pivot_dmso_bort(df):
     # raw data
     merge_cols = ['prism_replicate',
@@ -91,7 +88,6 @@ def pivot_dmso_bort(df):
     return res
 
 
-@st.cache(suppress_st_warning=True)
 def generate_pass_fail_tbl(mfi, qc):
     df = mfi.merge(qc, on=['prism_replicate', 'ccle_name', 'pert_plate'])
     res = pd.DataFrame(
