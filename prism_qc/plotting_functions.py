@@ -108,7 +108,7 @@ def plot_banana_plots(df, x, y, height):
 
 
 
-def plot_med_mad(df):
+def plot_liver_plots(df):
     g = px.scatter(data_frame=df,
                    x='ctl_vehicle_md',
                    y='ctl_vehicle_mad',
@@ -116,9 +116,10 @@ def plot_med_mad(df):
                    marginal_x='histogram',
                    marginal_y='histogram',
                    hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
-                   height=700)
+                   height=700,
+                   facet_col='culture')
     g.update_traces(marker=dict(opacity=0.5))
-    st.plotly_chart(g)
+    st.plotly_chart(g, use_container_width=True)
 
 
 

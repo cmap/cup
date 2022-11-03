@@ -139,7 +139,7 @@ if qc_file and mfi_file and run:
             with pert_plate:
                 plate = tab_labels[n]
                 n += 1
-                plotting_functions.plot_med_mad(qc_out[qc_out.pert_plate == plate])
+                plotting_functions.plot_liver_plots(qc_out[qc_out.pert_plate == plate])
 
         st.header('Plate distributions')
         tab_labels = mfi_out.pert_plate.unique().tolist()
