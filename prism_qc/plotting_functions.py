@@ -115,8 +115,10 @@ def plot_liver_plots(df):
                    marginal_y='histogram',
                    hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
                    height=700,
-                   facet_col='culture')
-    g.update_traces(marker=dict(opacity=0.5))
+                   facet_col='culture',
+                   color_discrete_map={True:'#66ff66',
+                                       False:'#ff0000'})
+    g.update_traces(marker=dict(opacity=0.75))
     g.for_each_xaxis(lambda xaxis: xaxis.update(showticklabels=True))
     st.plotly_chart(g, use_container_width=True)
 

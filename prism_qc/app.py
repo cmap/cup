@@ -102,9 +102,9 @@ if qc_file and mfi_file and run:
         st.subheader('Pass/Fail')
         pass_fail = df_transform.generate_pass_fail_tbl(mfi=mfi_out,
                                                         qc=qc_out)
-        st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#155115',
-                                                            vmin=0, vmax=100) \
-                 .bar(subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
+        st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
+            subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
+
         st.header('Banana plots (raw)')
         tab_labels = control_df.pert_plate.unique().tolist()
         n = 0
