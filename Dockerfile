@@ -16,5 +16,3 @@ RUN pip3 install -r requirements.txt
 ENTRYPOINT ["/bin/bash"]
 
 CMD ["./run_app.sh"]
-#ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
-#streamlit run --server.port 8889 app.py --logger.level=info 2> streamlit_logs.log
