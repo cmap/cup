@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-docker build -t prism/cup:latest .
+docker build -t prismcmap/cup:latest .

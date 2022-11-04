@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-docker run -it --entrypoint /bin/bash prism/cup:latest
+docker run -it --entrypoint /bin/bash prismcmap/cup:latest
