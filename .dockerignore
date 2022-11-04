@@ -4,3 +4,5 @@ enter_container.sh
 docker_run.sh
 docker_push_tags.sh
 .idea
+.git
+.gitignore
