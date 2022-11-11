@@ -4,6 +4,7 @@ disableWatchdogWarning = true
 [server]
 maxUploadSize = 4096
 baseUrlPath = 'cup'
+headless=true
 
 [browser]
 gatherUsageStats = false
