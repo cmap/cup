@@ -4,9 +4,9 @@ import streamlit as st
 import plotly.figure_factory as ff
 
 
-def plot_dynamic_range(df):
+def plot_dynamic_range(df, metric):
     g = px.ecdf(data_frame=df,
-                x='dr',
+                x=metric,
                 color='prism_replicate')
     g.add_vline(1.8, line_color='red', line_dash='dash')
     g.update_layout(

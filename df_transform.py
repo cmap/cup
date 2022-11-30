@@ -125,3 +125,13 @@ def generate_pass_fail_tbl(mfi, qc):
         tmp_df = pd.DataFrame(data=to_append, index=[0])
         res = pd.concat([res, tmp_df])
     return res
+
+
+def append_raw_dr(mfi, qc):
+    bort = mfi[mfi.pert_type == 'trt_poscon'].groupby(['prism_replicate','ccle_name','pert_type']).median().reset_index()[['prism_replicate','ccle_name','logMFI']]
+    dmso = mfi[mfi.pert_type == 'ctl_vehicle'].groupby(['prism_replicate','ccle_name','pert_type']).median().reset_index()[['prism_replicate','ccle_name','logMFI']]
+    dr = dmso.merge(bort, on=['prism_replicate','ccle_name'], suffixes= ('_dmso', '_bort'))
+    dr['dr_raw'] = dr['logMFI_dmso'] - dr['logMFI_bort']
+    dr = dr[['prism_replicate','ccle_name','dr_raw']]
+    res = qc.merge(dr, on=['prism_replicate','ccle_name'], how='left')
+    return res

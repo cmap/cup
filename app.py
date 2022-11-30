@@ -95,6 +95,7 @@ if run and build:
             # transform qc dataframe
 
             qc_out = qc.pipe(df_transform.add_pass_rates)
+            qc_out = df_transform.append_raw_dr(mfi, qc_out)
 
             # pivoted level for poscon/negcon comparison
             control_df = mfi_out.pipe(df_transform.pivot_dmso_bort)
@@ -117,9 +118,11 @@ if run and build:
                 plotting_functions.plot_pass_rates_by_pool(qc_out)
 
             st.header('QC Metrics')
-            lum_pert, ssmd = st.tabs(['Dynamic range', 'SSMD'])
-            with lum_pert:
-                plotting_functions.plot_dynamic_range(qc_out)
+            dr_norm, dr_raw, ssmd = st.tabs(['Dynamic range (norm)', 'Dynamic range (raw)', 'SSMD'])
+            with dr_norm:
+                plotting_functions.plot_dynamic_range(qc_out, 'dr')
+            with dr_raw:
+                plotting_functions.plot_dynamic_range(qc_out, 'dr_raw')
             with ssmd:
                 plotting_functions.plot_ssmd(qc_out)
 
