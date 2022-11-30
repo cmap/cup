@@ -7,6 +7,8 @@ from pathlib import Path
 import logging
 import s3fs
 import math
+import os
+from metadata import prism_metadata
 
 logging.basicConfig(filename='./logs/ctg_logs.log')
 logging.debug('This message should go to the log file')
@@ -25,18 +27,37 @@ hide_table_row_index = """
             """
 st.markdown(hide_table_row_index, unsafe_allow_html=True)  # hide table indices while displayed
 
-# aws fs setup
+# AWS/API setup
+# API_URL = os.environ['API_URL']
+API_URL = 'https://api.clue.io/api/'
+API_KEY = os.environ['API_KEY']
+BUILDS_URL = API_URL + 'data/'
+
+# get list of builds
+builds = prism_metadata.get_data_from_db(
+    endpoint_url=BUILDS_URL,
+    user_key=API_KEY,
+    fields=['name','data_build_types', 'role']
+)
 
 fs = s3fs.S3FileSystem(anon=False)
-build_list = fs.ls('s3://macchiato.clue.io/builds')
-builds = []
-for i in build_list:
-    res = i.split('/')[2]
-    builds.append(res)
+
+builds_list = []
+for i in builds:
+    # insert filter IF here
+    builds_list.append(list(i.values())[0])
+print(builds_list)
+
+# build_list = fs.ls('s3://macchiato.clue.io/builds')
+# builds = []
+# for i in build_list:
+#    res = i.split('/')[2]
+#    builds.append(res)
+
 
 # USER INPUTS
 
-build = st.selectbox("Select build", builds)
+build = st.selectbox("Select build", builds_list)
 run = st.button('Run')
 
 # find files on AWS
