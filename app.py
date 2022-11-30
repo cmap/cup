@@ -25,22 +25,46 @@ hide_table_row_index = """
             """
 st.markdown(hide_table_row_index, unsafe_allow_html=True)  # hide table indices while displayed
 
+# aws fs setup
+
+fs = s3fs.S3FileSystem(anon=False)
+build_list = fs.ls('s3://macchiato.clue.io/builds')
+builds = []
+for i in build_list:
+    res = i.split('/')[2]
+    builds.append(res)
+
 # USER INPUTS
 
-build = "PREP_C_PR500_GOOD"  # testing, will need to get from URL eventually
-
-qc_file = st.file_uploader('Upload your qc table here', type='csv')
-mfi_file = st.file_uploader('Upload your mfi table here', type='csv')
-
+build = st.selectbox("Select build", builds)
 run = st.button('Run')
 
-# aws fs setup
-fs = s3fs.S3FileSystem(anon=False)
-build_path = "s3://macchiato.clue.io/builds/" + build + "/build/"
+# find files on AWS
+
+
+def get_lvl3(files):
+    for file in files:
+        if 'LEVEL3' in file:
+            return file
+
+
+def get_qc_table(files):
+    for file in files:
+        if 'QC_TABLE' in file:
+            return file
+
 
 # inputs
 
-if qc_file and mfi_file and run:
+
+if run and build:
+
+    build_path = "s3://macchiato.clue.io/builds/" + build + "/build/"
+    file_list = fs.ls(build_path)
+    qc_file = 's3://' + get_qc_table(file_list)
+    print('QC file found: ' + qc_file)
+    mfi_file = 's3://' + get_lvl3(file_list)
+    print('MFI file found: ' + mfi_file)
 
     with st.spinner('Generating report...'):
         # read data
