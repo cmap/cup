@@ -247,16 +247,22 @@ if run and build:
                                                                        value='logMFI')
             if mfi.prism_replicate.unique().size > 1:
                 st.header('Replicate correlations')
-                tab_labels = mfi[~mfi.pert_plate.str.contains('BASE')].pert_plate.unique().tolist()
-                n = 0
-                for pert_plate in st.tabs(tab_labels):
-                    with pert_plate:
-                        plate = tab_labels[n]
-                        n += 1
-                        corr = plotting_functions.reshape_df_for_corrplot(mfi[mfi['pert_plate'] == plate])
-                        sub_mfi = mfi[mfi['pert_plate'] == plate]
-                        print(corr.head())
-                        plotting_functions.plot_corrplot(df=corr,
-                                                         sub_mfi=sub_mfi)
+                cs_labels = list(mfi.culture.unique())
+                i = 0
+                for cell_set in st.tabs(cs_labels):
+                    with cell_set:
+                        cs = cs_labels[i]
+                        i += 1
+                        tab_labels = mfi[(~mfi.pert_plate.str.contains('BASE')) & (mfi.culture == cs)].pert_plate.unique().tolist()
+                        n = 0
+                        for pert_plate in st.tabs(tab_labels):
+                            with pert_plate:
+                                plate = tab_labels[n]
+                                n += 1
+                                corr = plotting_functions.reshape_df_for_corrplot(mfi[mfi['pert_plate'] == plate])
+                                sub_mfi = mfi[mfi['pert_plate'] == plate]
+                                print(corr.head())
+                                plotting_functions.plot_corrplot(df=corr,
+                                                                 sub_mfi=sub_mfi)
     else:
         st.text('Build does not exist; check S3.')
