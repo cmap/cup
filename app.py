@@ -18,7 +18,8 @@ base_path = Path(__file__)
 
 # config theme
 
-st.set_page_config(layout='wide')
+st.set_page_config(layout='wide',
+                   page_title='PRISM QC')
 
 hide_table_row_index = """
             <style>

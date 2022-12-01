@@ -181,6 +181,6 @@ def plot_corrplot(df, sub_mfi):
         dimensions=dimensions,
         showupperhalf=False,
         text=df['perturbation']))
-    g.update_layout(height=1000,
-                    width=1000)
+    g.update_layout(height=750,
+                    width=750)
     st.plotly_chart(g)
