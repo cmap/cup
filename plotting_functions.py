@@ -2,7 +2,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
-import seaborn as sns
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
