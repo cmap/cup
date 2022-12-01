@@ -85,7 +85,7 @@ if run and build:
         with st.spinner('Generating report...'):
             # read data
             mfi_cols = ['prism_replicate', 'pool_id', 'ccle_name', 'culture', 'pert_type', 'pert_well', 'replicate',
-                        'logMFI_norm', 'logMFI', 'pert_plate']
+                        'logMFI_norm', 'logMFI', 'pert_plate','pert_iname','pert_dose']
             qc_cols = ['prism_replicate', 'ccle_name', 'pool_id', 'culture', 'pert_plate', 'ctl_vehicle_md',
                        'trt_poscon_md', 'ctl_vehicle_mad', 'trt_poscon_mad', 'ssmd', 'nnmd', 'error_rate', 'dr', 'pass']
 
@@ -128,7 +128,8 @@ if run and build:
                 **Error rate** ≤ 0.05
                 
                 Note: there is a third possible failure mode. If 2 replicates fail by the above metrics, the third 
-                replicate will also be flagged as a failure.
+                replicate will also be flagged as a failure. In this case, that cell line will be excluded from that 
+                plate. 
                
                 """)
 
@@ -244,5 +245,18 @@ if run and build:
                         plotting_functions.plot_distributions_by_plate(data,
                                                                        height=height,
                                                                        value='logMFI')
+            if mfi.prism_replicate.unique().size > 1:
+                st.header('Replicate correlations')
+                tab_labels = mfi.pert_plate.unique().tolist()
+                n = 0
+                for pert_plate in st.tabs(tab_labels):
+                    with pert_plate:
+                        plate = tab_labels[n]
+                        n += 1
+                        corr = plotting_functions.reshape_df_for_corrplot(mfi[mfi['pert_plate'] == plate])
+                        sub_mfi = mfi[mfi['pert_plate'] == plate]
+                        print(corr.head())
+                        plotting_functions.plot_corrplot(df=corr,
+                                                         sub_mfi=sub_mfi)
     else:
         st.text('Build does not exist; check S3.')

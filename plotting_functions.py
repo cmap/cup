@@ -2,9 +2,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
+import seaborn as sns
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
+
+# DYNAMIC RANGE
 
 
 def plot_dynamic_range(df, metric):
@@ -18,6 +21,8 @@ def plot_dynamic_range(df, metric):
     )
     st.plotly_chart(g)
 
+# SSMD
+
 
 def plot_ssmd(df):
     data = df.sort_values('prism_replicate')
@@ -30,6 +35,8 @@ def plot_ssmd(df):
                      barmode='overlay')
     g.add_vline(x=-2, line_color='red', line_dash='dash', line_width=3)
     st.plotly_chart(g, use_container_width=True)
+
+# PASS RATES
 
 
 def plot_pass_rates_by_plate(df):
@@ -54,6 +61,9 @@ def plot_pass_rates_by_pool(df):
     st.plotly_chart(g, use_container_width=True)
 
 
+# DISTRIBUTIONS
+
+
 def plot_distributions(df, value='logMFI'):
     g = px.histogram(data_frame=df,
                      color='pert_type',
@@ -68,7 +78,7 @@ def plot_distributions_by_plate(df, height, value='logMFI'):
     data = df
     controls = ['prism invariant 1', 'prism invariant 10']
     data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle'), 'pert_type'] = \
-    data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle')]['ccle_name']
+        data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle')]['ccle_name']
     g = px.histogram(data_frame=data,
                      color='pert_type',
                      x=value,
@@ -81,6 +91,9 @@ def plot_distributions_by_plate(df, height, value='logMFI'):
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     g.update_layout(yaxis_title='')
     st.plotly_chart(g, use_container_width=True)
+
+
+# BANANA PLOTS
 
 
 def plot_banana_plots(df, x, y, height):
@@ -109,6 +122,8 @@ def plot_banana_plots(df, x, y, height):
     st.plotly_chart(g, use_container_width=False)
 
 
+# LIVER PLOTS
+
 def plot_liver_plots(df):
     g = px.scatter(data_frame=df,
                    x='ctl_vehicle_md',
@@ -118,12 +133,14 @@ def plot_liver_plots(df):
                    marginal_y='histogram',
                    hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
                    height=700,
-                   color_discrete_map={True:'#66ff66',
-                                       False:'#ff0000'})
+                   color_discrete_map={True: '#66ff66',
+                                       False: '#ff0000'})
     g.update_traces(marker=dict(opacity=0.75))
     g.for_each_xaxis(lambda xaxis: xaxis.update(showticklabels=True))
     st.plotly_chart(g, use_container_width=True)
 
+
+# ERROR RATE V SSMD
 
 def plot_ssmd_error_rate(df, height):
     g = px.scatter(data_frame=df,
@@ -140,3 +157,31 @@ def plot_ssmd_error_rate(df, height):
                     opacity=0.7)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     st.plotly_chart(g, use_container_width=True)
+
+
+# REPLICATE CORRELATION
+
+def reshape_df_for_corrplot(df, metric='logMFI_norm'):
+    df['perturbation'] = df['pert_iname'] + ' ' + df['pert_dose'].astype('str')
+
+    cols = [metric,
+            'prism_replicate',
+            'perturbation']
+
+    res = df[cols].pivot_table(index='perturbation', columns='prism_replicate', values=metric).reset_index()
+    return res
+
+
+def plot_corrplot(df, sub_mfi):
+    dimensions = []
+    for plate in sub_mfi.prism_replicate.unique():
+        out = dict(label=plate,
+                   values=df[plate])
+        dimensions.append(out)
+    g = go.Figure(go.Splom(
+        dimensions=dimensions,
+        showupperhalf=False,
+        text=df['perturbation']))
+    g.update_layout(height=1000,
+                    width=1000)
+    st.plotly_chart(g)
