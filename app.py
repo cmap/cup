@@ -37,7 +37,7 @@ BUILDS_URL = API_URL + 'data/'
 builds = prism_metadata.get_data_from_db(
     endpoint_url=BUILDS_URL,
     user_key=API_KEY,
-    fields=['name','data_build_types', 'role']
+    fields=['name', 'data_build_types', 'role']
 )
 
 fs = s3fs.S3FileSystem(anon=False)
@@ -51,6 +51,7 @@ for i in builds:
 
 build = st.selectbox("Select build", builds_list)
 run = st.button('Run')
+
 
 # find files on AWS
 
@@ -111,18 +112,53 @@ if run and build:
             st.header(date.today())
 
             st.header('Pass rates')
+            st.write(
+                """
+                
+                Passing rates are determined on a plate and cell line basis by a combination of 2 QC metrics, 
+                dynamic range and error rate. 
+                
+                
+                Thresholds are:
+
+
+                **Dynamic range** > $log{_2}{0.3}$ (~1.74)
+
+                **Error rate** ≤ 0.05
+                
+                Note: there is a third possible failure mode. If 2 replicates fail by the above metrics, the third 
+                replicate will also be flagged as a failure.
+               
+                """)
+
             by_plate, by_pool = st.tabs(['By plate', 'By pool'])
             with by_plate:
                 plotting_functions.plot_pass_rates_by_plate(qc_out)
             with by_pool:
                 plotting_functions.plot_pass_rates_by_pool(qc_out)
 
+            st.subheader('Raw pass/fail')
+            st.write(
+                """
+                
+                In this table, the pass rates are calculated without regard to performance within sets of replicates. 
+                Therefore, the numbers you see here may differ slightly from the grpahs shown above. However, 
+                this gives a more accurate representation of the performace of individual plates. 
+                
+                """)
+            pass_fail = df_transform.generate_pass_fail_tbl(mfi=mfi_out,
+                                                            qc=qc_out)
+            st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
+                subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
+
             st.header('QC Metrics')
-            dr_norm, dr_raw, ssmd = st.tabs(['Dynamic range (norm)', 'Dynamic range (raw)', 'SSMD'])
-            with dr_norm:
-                plotting_functions.plot_dynamic_range(qc_out, 'dr')
-            with dr_raw:
-                plotting_functions.plot_dynamic_range(qc_out, 'dr_raw')
+            dr, ssmd = st.tabs(['Dynamic range', 'SSMD'])
+            with dr:
+                dr_raw, dr_norm = st.tabs(['Raw', 'Normalized'])
+                with dr_raw:
+                    plotting_functions.plot_dynamic_range(qc_out, 'dr_raw')
+                with dr_norm:
+                    plotting_functions.plot_dynamic_range(qc_out, 'dr')
             with ssmd:
                 plotting_functions.plot_ssmd(qc_out)
 
@@ -137,39 +173,34 @@ if run and build:
                     height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
                     plotting_functions.plot_ssmd_error_rate(data, height=height)
 
-            st.subheader('Pass/Fail')
-            pass_fail = df_transform.generate_pass_fail_tbl(mfi=mfi_out,
-                                                            qc=qc_out)
-            st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
-                subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
-
-            st.header('Banana plots (raw)')
-            tab_labels = control_df.pert_plate.unique().tolist()
-            n = 0
-            for pert_plate in st.tabs(tab_labels):
-                with pert_plate:
-                    plate = tab_labels[n]
-                    n += 1
-                    data = control_df[control_df.pert_plate == plate]
-                    height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                    plotting_functions.plot_banana_plots(data,
-                                                         x='ctl_vehicle_med',
-                                                         y='trt_poscon_med',
-                                                         height=height)
-
-            st.header('Banana plots (normalized)')
-            tab_labels = control_df.pert_plate.unique().tolist()
-            n = 0
-            for pert_plate in st.tabs(tab_labels):
-                with pert_plate:
-                    plate = tab_labels[n]
-                    n += 1
-                    data = control_df[control_df.pert_plate == plate]
-                    height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                    plotting_functions.plot_banana_plots(data,
-                                                         x='ctl_vehicle_med_norm',
-                                                         y='trt_poscon_med_norm',
-                                                         height=height)
+            st.header('Banana plots')
+            banana_raw, banana_normalized = st.tabs(['Raw', 'Normalized'])
+            with banana_raw:
+                tab_labels = control_df.pert_plate.unique().tolist()
+                n = 0
+                for pert_plate in st.tabs(tab_labels):
+                    with pert_plate:
+                        plate = tab_labels[n]
+                        n += 1
+                        data = control_df[control_df.pert_plate == plate]
+                        height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
+                        plotting_functions.plot_banana_plots(data,
+                                                             x='ctl_vehicle_med',
+                                                             y='trt_poscon_med',
+                                                             height=height)
+            with banana_normalized:
+                tab_labels = control_df.pert_plate.unique().tolist()
+                n = 0
+                for pert_plate in st.tabs(tab_labels):
+                    with pert_plate:
+                        plate = tab_labels[n]
+                        n += 1
+                        data = control_df[control_df.pert_plate == plate]
+                        height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
+                        plotting_functions.plot_banana_plots(data,
+                                                             x='ctl_vehicle_med_norm',
+                                                             y='trt_poscon_med_norm',
+                                                             height=height)
 
             st.header('Liver plots')
             tab_labels = qc_out.pert_plate.unique().tolist()

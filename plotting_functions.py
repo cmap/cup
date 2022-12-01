@@ -63,7 +63,7 @@ def plot_distributions(df, value='logMFI'):
 
 def plot_distributions_by_plate(df, height, value='logMFI'):
     data = df
-    controls = ['prism invariant 1', 'prism invariant 6', 'prism invariant 10']
+    controls = ['prism invariant 1', 'prism invariant 10']
     data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle'), 'pert_type'] = \
     data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle')]['ccle_name']
     g = px.histogram(data_frame=data,
