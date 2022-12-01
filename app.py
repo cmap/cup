@@ -122,7 +122,7 @@ if run and build:
                 Thresholds are:
 
 
-                **Dynamic range** > $log{_2}{0.3}$ (~1.74)
+                **Dynamic range** > -$log{_2}{0.3}$ (~1.74)
 
                 **Error rate** ≤ 0.05
                 

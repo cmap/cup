@@ -1,14 +1,17 @@
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-import plotly.figure_factory as ff
+import numpy as np
+
+dr_threshold = -np.log2(0.3)
+er_threshold = 0.05
 
 
 def plot_dynamic_range(df, metric):
     g = px.ecdf(data_frame=df,
                 x=metric,
                 color='prism_replicate')
-    g.add_vline(1.8, line_color='red', line_dash='dash')
+    g.add_vline(dr_threshold, line_color='red', line_dash='dash')
     g.update_layout(
         xaxis_title="Dynamic range",
         yaxis_title=""
@@ -132,8 +135,8 @@ def plot_ssmd_error_rate(df, height):
                    y='error_rate',
                    hover_data=['ccle_name', 'pool_id'],
                    height=height)
-    g.add_vline(x=1.8, line_color='#d65f5f', line_dash='dash')
-    g.add_hline(y=0.05, line_color='#d65f5f', line_dash='dash')
+    g.add_vline(x=dr_threshold, line_color='#d65f5f', line_dash='dash')
+    g.add_hline(y=er_threshold, line_color='#d65f5f', line_dash='dash')
     g.update_traces(marker={'size': 4},
                     opacity=0.7)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))

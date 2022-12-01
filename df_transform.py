@@ -1,8 +1,8 @@
 # setup
 import pandas as pd
-import streamlit as st
+import numpy as np
 
-dr_threshold = 1.8
+dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
 
 
