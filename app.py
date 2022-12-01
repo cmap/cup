@@ -247,7 +247,7 @@ if run and build:
                                                                        value='logMFI')
             if mfi.prism_replicate.unique().size > 1:
                 st.header('Replicate correlations')
-                tab_labels = mfi.pert_plate.unique().tolist()
+                tab_labels = mfi[~mfi.pert_plate.str.contains('BASE')].pert_plate.unique().tolist()
                 n = 0
                 for pert_plate in st.tabs(tab_labels):
                     with pert_plate:

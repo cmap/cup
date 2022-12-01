@@ -164,16 +164,16 @@ def reshape_df_for_corrplot(df, metric='logMFI_norm'):
     df['perturbation'] = df['pert_iname'] + ' ' + df['pert_dose'].astype('str')
 
     cols = [metric,
-            'prism_replicate',
+            'replicate',
             'perturbation']
 
-    res = df[cols].pivot_table(index='perturbation', columns='prism_replicate', values=metric).reset_index()
+    res = df[cols].pivot_table(index='perturbation', columns='replicate', values=metric).reset_index()
     return res
 
 
 def plot_corrplot(df, sub_mfi):
     dimensions = []
-    for plate in sub_mfi.prism_replicate.unique():
+    for plate in sub_mfi.replicate.unique():
         out = dict(label=plate,
                    values=df[plate])
         dimensions.append(out)
