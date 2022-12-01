@@ -1,13 +1,14 @@
-import streamlit as st
-import pandas as pd
-import plotting_functions
-import df_transform
-from datetime import date
-from pathlib import Path
 import logging
-import s3fs
 import math
 import os
+from pathlib import Path
+
+import pandas as pd
+import s3fs
+import streamlit as st
+
+import df_transform
+import plotting_functions
 from metadata import prism_metadata
 
 logging.basicConfig(filename='./logs/ctg_logs.log')
@@ -142,8 +143,8 @@ if run and build:
                 """
                 
                 In this table, the pass rates are calculated without regard to performance within sets of replicates. 
-                Therefore, the numbers you see here may differ slightly from the grpahs shown above. However, 
-                this gives a more accurate representation of the performace of individual plates. 
+                Therefore, the numbers you see here may differ slightly from the graphs shown above. However, 
+                this gives a more accurate representation of the performance of individual plates. 
                 
                 """)
             pass_fail = df_transform.generate_pass_fail_tbl(mfi=mfi_out,
@@ -154,11 +155,11 @@ if run and build:
             st.header('QC Metrics')
             dr, ssmd = st.tabs(['Dynamic range', 'SSMD'])
             with dr:
-                dr_raw, dr_norm = st.tabs(['Raw', 'Normalized'])
-                with dr_raw:
-                    plotting_functions.plot_dynamic_range(qc_out, 'dr_raw')
+                dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
                 with dr_norm:
                     plotting_functions.plot_dynamic_range(qc_out, 'dr')
+                with dr_raw:
+                    plotting_functions.plot_dynamic_range(qc_out, 'dr_raw')
             with ssmd:
                 plotting_functions.plot_ssmd(qc_out)
 
@@ -174,20 +175,7 @@ if run and build:
                     plotting_functions.plot_ssmd_error_rate(data, height=height)
 
             st.header('Banana plots')
-            banana_raw, banana_normalized = st.tabs(['Raw', 'Normalized'])
-            with banana_raw:
-                tab_labels = control_df.pert_plate.unique().tolist()
-                n = 0
-                for pert_plate in st.tabs(tab_labels):
-                    with pert_plate:
-                        plate = tab_labels[n]
-                        n += 1
-                        data = control_df[control_df.pert_plate == plate]
-                        height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                        plotting_functions.plot_banana_plots(data,
-                                                             x='ctl_vehicle_med',
-                                                             y='trt_poscon_med',
-                                                             height=height)
+            banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
             with banana_normalized:
                 tab_labels = control_df.pert_plate.unique().tolist()
                 n = 0
@@ -201,15 +189,34 @@ if run and build:
                                                              x='ctl_vehicle_med_norm',
                                                              y='trt_poscon_med_norm',
                                                              height=height)
+            with banana_raw:
+                tab_labels = control_df.pert_plate.unique().tolist()
+                n = 0
+                for pert_plate in st.tabs(tab_labels):
+                    with pert_plate:
+                        plate = tab_labels[n]
+                        n += 1
+                        data = control_df[control_df.pert_plate == plate]
+                        height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
+                        plotting_functions.plot_banana_plots(data,
+                                                             x='ctl_vehicle_med',
+                                                             y='trt_poscon_med',
+                                                             height=height)
 
             st.header('Liver plots')
-            tab_labels = qc_out.pert_plate.unique().tolist()
+            cs_labels = list(qc_out.culture.unique())
             n = 0
-            for pert_plate in st.tabs(tab_labels):
-                with pert_plate:
-                    plate = tab_labels[n]
+            for culture in st.tabs(cs_labels):
+                with culture:
+                    cell_set = cs_labels[n]
                     n += 1
-                    plotting_functions.plot_liver_plots(qc_out[qc_out.pert_plate == plate])
+                    plate_labels = list(qc_out.pert_plate.unique())
+                    i = 0
+                    for pert_plate in st.tabs(plate_labels):
+                        with pert_plate:
+                            plate = plate_labels[i]
+                            i += 1
+                            plotting_functions.plot_liver_plots(qc_out[(qc_out.pert_plate == plate) & (qc_out.culture == cell_set)])
 
             st.header('Plate distributions')
             norm, raw = st.tabs(['Normalized', 'Raw'])
