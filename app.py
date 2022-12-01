@@ -108,8 +108,8 @@ if run and build:
 
             # OUTPUT
 
-            st.title('QC report')
-            st.header(date.today())
+            st.title('PRISM QC report')
+            st.header(build)
 
             st.header('Pass rates')
             st.write(
