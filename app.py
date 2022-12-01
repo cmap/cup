@@ -51,12 +51,31 @@ for i in builds:
 
 # USER INPUTS
 
-build = st.selectbox("Select build", builds_list)
+# build = st.selectbox("Select build", builds_list)
+
+# callback to update query param on selectbox change
+def update_params():
+    st.experimental_set_query_params(option=st.session_state.qp)
+
+
+query_params = st.experimental_get_query_params()
+
+# set selectbox value based on query param, or provide a default
+ix = 0
+if query_params:
+    try:
+        ix = builds_list.index(query_params['option'][0])
+    except ValueError:
+        pass
+
+build = st.selectbox(
+    "Param", builds_list, index=ix, key="qp", on_change=update_params
+)
+
+# set query param based on selection
+st.experimental_set_query_params(option=build)
+
 run = st.button('Run')
-
-
-# find files on AWS
-
 
 def get_lvl3(files):
     for file in files:
@@ -86,7 +105,7 @@ if run and build:
         with st.spinner('Generating report...'):
             # read data
             mfi_cols = ['prism_replicate', 'pool_id', 'ccle_name', 'culture', 'pert_type', 'pert_well', 'replicate',
-                        'logMFI_norm', 'logMFI', 'pert_plate','pert_iname','pert_dose']
+                        'logMFI_norm', 'logMFI', 'pert_plate', 'pert_iname', 'pert_dose']
             qc_cols = ['prism_replicate', 'ccle_name', 'pool_id', 'culture', 'pert_plate', 'ctl_vehicle_md',
                        'trt_poscon_md', 'ctl_vehicle_mad', 'trt_poscon_mad', 'ssmd', 'nnmd', 'error_rate', 'dr', 'pass']
 
@@ -218,7 +237,8 @@ if run and build:
                         with pert_plate:
                             plate = plate_labels[i]
                             i += 1
-                            plotting_functions.plot_liver_plots(qc_out[(qc_out.pert_plate == plate) & (qc_out.culture == cell_set)])
+                            plotting_functions.plot_liver_plots(
+                                qc_out[(qc_out.pert_plate == plate) & (qc_out.culture == cell_set)])
 
             st.header('Plate distributions')
             norm, raw = st.tabs(['Normalized', 'Raw'])
@@ -254,7 +274,8 @@ if run and build:
                     with cell_set:
                         cs = cs_labels[i]
                         i += 1
-                        tab_labels = mfi[(~mfi.pert_plate.str.contains('BASE')) & (mfi.culture == cs)].pert_plate.unique().tolist()
+                        tab_labels = mfi[
+                            (~mfi.pert_plate.str.contains('BASE')) & (mfi.culture == cs)].pert_plate.unique().tolist()
                         n = 0
                         for pert_plate in st.tabs(tab_labels):
                             with pert_plate:
