@@ -212,15 +212,30 @@ if run and build:
                     plotting_functions.plot_liver_plots(qc_out[qc_out.pert_plate == plate])
 
             st.header('Plate distributions')
-            tab_labels = mfi_out.pert_plate.unique().tolist()
-            n = 0
-            for pert_plate in st.tabs(tab_labels):
-                with pert_plate:
-                    plate = tab_labels[n]
-                    n += 1
-                    data = mfi_out[mfi_out.pert_plate == plate]
-                    height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                    plotting_functions.plot_distributions_by_plate(data,
-                                                                   height=height)
+            norm, raw = st.tabs(['Normalized', 'Raw'])
+            with norm:
+                tab_labels = mfi_out.pert_plate.unique().tolist()
+                n = 0
+                for pert_plate in st.tabs(tab_labels):
+                    with pert_plate:
+                        plate = tab_labels[n]
+                        n += 1
+                        data = mfi_out[mfi_out.pert_plate == plate]
+                        height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
+                        plotting_functions.plot_distributions_by_plate(data,
+                                                                       height=height,
+                                                                       value='logMFI_norm')
+            with raw:
+                tab_labels = mfi_out.pert_plate.unique().tolist()
+                n = 0
+                for pert_plate in st.tabs(tab_labels):
+                    with pert_plate:
+                        plate = tab_labels[n]
+                        n += 1
+                        data = mfi_out[mfi_out.pert_plate == plate]
+                        height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
+                        plotting_functions.plot_distributions_by_plate(data,
+                                                                       height=height,
+                                                                       value='logMFI')
     else:
         st.text('Build does not exist; check S3.')
