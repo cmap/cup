@@ -185,7 +185,14 @@ if run and build:
                 with dr_raw:
                     plotting_functions.plot_dynamic_range(qc_out, 'dr_raw')
                 with dr_comp:
-                    plotting_functions.plot_dynamic_range_norm_raw(qc_out)
+                    tab_labels = qc_out.culture.unique().tolist()
+                    n = 0
+                    for assay in st.tabs(tab_labels):
+                        with assay:
+                            assay_type = tab_labels[n]
+                            n += 1
+                            data = qc_out[qc_out.culture == assay_type]
+                            plotting_functions.plot_dynamic_range_norm_raw(data)
             with ssmd:
                 plotting_functions.plot_ssmd(qc_out)
 
