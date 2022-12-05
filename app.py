@@ -33,13 +33,13 @@ st.markdown(hide_table_row_index, unsafe_allow_html=True)  # hide table indices 
 # API_URL = os.environ['API_URL']
 API_URL = 'https://api.clue.io/api/'
 API_KEY = os.environ['API_KEY']
-BUILDS_URL = API_URL + 'data/'
+BUILDS_URL = API_URL + 'data_build_types/prism-builds'
 
 # get list of builds
 builds = prism_metadata.get_data_from_db(
     endpoint_url=BUILDS_URL,
     user_key=API_KEY,
-    fields=['name', 'data_build_types', 'role']
+    fields=['name']
 )
 
 fs = s3fs.S3FileSystem(anon=False)
