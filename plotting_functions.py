@@ -20,6 +20,28 @@ def plot_dynamic_range(df, metric):
     )
     st.plotly_chart(g)
 
+
+def plot_dynamic_range_norm_raw(df):
+    g = px.scatter(data_frame=df,
+                   x='dr_raw',
+                   y='dr',
+                   facet_row='pert_plate',
+                   facet_col='replicate',
+                   width=1000)
+    x_line = (0, 6)
+    g.update_traces(marker={'size': 4},
+                    opacity=0.7)
+    g.add_trace(go.Scatter(x=x_line,
+                           y=x_line,
+                           line=dict(color='#d65f5f',
+                                     dash='dash',
+                                     width=1),
+                           marker=dict(size=0.1),
+                           showlegend=False),
+                row='all', col='all', exclude_empty_subplots=True)
+    g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+    st.plotly_chart(g, use_container_width=False)
+
 # SSMD
 
 
@@ -132,7 +154,7 @@ def plot_liver_plots(df):
                    marginal_y='histogram',
                    hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
                    height=600,
-                   width=600,
+                   width=800,
                    color_discrete_map={True: '#66ff66',
                                        False: '#ff0000'})
     g.update_traces(marker=dict(opacity=0.75))
@@ -150,13 +172,14 @@ def plot_ssmd_error_rate(df, height):
                    x='dr',
                    y='error_rate',
                    hover_data=['ccle_name', 'pool_id'],
-                   height=height)
+                   height=height,
+                   width=1000)
     g.add_vline(x=dr_threshold, line_color='#d65f5f', line_dash='dash')
     g.add_hline(y=er_threshold, line_color='#d65f5f', line_dash='dash')
     g.update_traces(marker={'size': 4},
                     opacity=0.7)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    st.plotly_chart(g, use_container_width=True)
+    st.plotly_chart(g, use_container_width=False)
 
 
 # REPLICATE CORRELATION

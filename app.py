@@ -49,6 +49,7 @@ for i in builds:
     # insert filter IF here
     builds_list.append(list(i.values())[0])
 
+
 # USER INPUTS
 
 # build = st.selectbox("Select build", builds_list)
@@ -76,6 +77,7 @@ build = st.selectbox(
 st.experimental_set_query_params(option=build)
 
 run = st.button('Run')
+
 
 def get_lvl3(files):
     for file in files:
@@ -116,7 +118,8 @@ if run and build:
             mfi_out = mfi.pipe(df_transform.add_bc_type)
             # transform qc dataframe
 
-            qc_out = qc.pipe(df_transform.add_pass_rates)
+            qc_out = qc.pipe(df_transform.add_pass_rates) \
+                .pipe(df_transform.add_replicate)
             qc_out = df_transform.append_raw_dr(mfi, qc_out)
 
             # pivoted level for poscon/negcon comparison
@@ -176,11 +179,13 @@ if run and build:
             st.header('QC Metrics')
             dr, ssmd = st.tabs(['Dynamic range', 'SSMD'])
             with dr:
-                dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
+                dr_norm, dr_raw, dr_comp = st.tabs(['Normalized', 'Raw', 'Comparison'])
                 with dr_norm:
                     plotting_functions.plot_dynamic_range(qc_out, 'dr')
                 with dr_raw:
                     plotting_functions.plot_dynamic_range(qc_out, 'dr_raw')
+                with dr_comp:
+                    plotting_functions.plot_dynamic_range_norm_raw(qc_out)
             with ssmd:
                 plotting_functions.plot_ssmd(qc_out)
 

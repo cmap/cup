@@ -11,7 +11,7 @@ def add_pass_rates(df):
         ['prism_replicate', 'culture', 'pert_plate']).count().reset_index()
     n_instances = df[['pass', 'prism_replicate', 'culture', 'pert_plate']].groupby(
         ['prism_replicate', 'culture', 'pert_plate']).count().reset_index().rename(
-        columns={'pass':'n_instances'})
+        columns={'pass': 'n_instances'})
     pass_rates = pass_rates.merge(n_instances, on=['prism_replicate', 'culture', 'pert_plate'])
     pass_rates['pct_pass'] = ((pass_rates['pass'] / pass_rates['n_instances']) * 100).astype(int)
     res = df.merge(pass_rates[['prism_replicate', 'pct_pass']], on=['prism_replicate'])
@@ -21,6 +21,11 @@ def add_pass_rates(df):
 def add_bc_type(df):
     df.loc[df.pool_id == 'CTLBC', 'bc_type'] = 'control'
     df.loc[df.pool_id != 'CTLBC', 'bc_type'] = 'cell_line'
+    return df
+
+
+def add_replicate(df):
+    df['replicate'] = df.prism_replicate.str.split('_').str[3].str.split('.').str[0]
     return df
 
 
@@ -98,7 +103,8 @@ def generate_pass_fail_tbl(mfi, qc):
                     'pool_id',
                     'pass']
 
-    df = mfi.drop(columns=mfi_drop_cols).merge(qc.drop(columns=qc_drop_cols), on=['prism_replicate', 'ccle_name', 'pert_plate', 'culture'])
+    df = mfi.drop(columns=mfi_drop_cols).merge(qc.drop(columns=qc_drop_cols),
+                                               on=['prism_replicate', 'ccle_name', 'pert_plate', 'culture'])
 
     res = pd.DataFrame(
         columns=['prism_replicate', 'pert_plate', 'culture', 'Pass',
@@ -108,13 +114,13 @@ def generate_pass_fail_tbl(mfi, qc):
         pert_plate = df[df.prism_replicate == plate]['pert_plate'].unique()[0]
         n_samples = df[df.prism_replicate == plate].shape[0]
         fail_dr = int((df.loc[(df.prism_replicate == plate) & (df.dr < dr_threshold) & (
-                    df.error_rate <= er_threshold)].shape[0] / n_samples) * 100)
+                df.error_rate <= er_threshold)].shape[0] / n_samples) * 100)
         fail_both = int((df.loc[(df.prism_replicate == plate) & (df.dr < dr_threshold) & (
-                    df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
+                df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
         pass_both = int((df.loc[(df.prism_replicate == plate) & (df.dr >= dr_threshold) & (
-                    df.error_rate <= er_threshold)].shape[0] / n_samples) * 100)
+                df.error_rate <= er_threshold)].shape[0] / n_samples) * 100)
         fail_er = int((df.loc[(df.prism_replicate == plate) & (df.dr >= dr_threshold) & (
-                    df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
+                df.error_rate > er_threshold)].shape[0] / n_samples) * 100)
         to_append = {'prism_replicate': plate,
                      'pert_plate': pert_plate,
                      'culture': culture,
@@ -128,10 +134,14 @@ def generate_pass_fail_tbl(mfi, qc):
 
 
 def append_raw_dr(mfi, qc):
-    bort = mfi[mfi.pert_type == 'trt_poscon'].groupby(['prism_replicate','ccle_name','pert_type']).median().reset_index()[['prism_replicate','ccle_name','logMFI']]
-    dmso = mfi[mfi.pert_type == 'ctl_vehicle'].groupby(['prism_replicate','ccle_name','pert_type']).median().reset_index()[['prism_replicate','ccle_name','logMFI']]
-    dr = dmso.merge(bort, on=['prism_replicate','ccle_name'], suffixes= ('_dmso', '_bort'))
+    bort = \
+    mfi[mfi.pert_type == 'trt_poscon'].groupby(['prism_replicate', 'ccle_name', 'pert_type']).median().reset_index()[
+        ['prism_replicate', 'ccle_name', 'logMFI']]
+    dmso = \
+    mfi[mfi.pert_type == 'ctl_vehicle'].groupby(['prism_replicate', 'ccle_name', 'pert_type']).median().reset_index()[
+        ['prism_replicate', 'ccle_name', 'logMFI']]
+    dr = dmso.merge(bort, on=['prism_replicate', 'ccle_name'], suffixes=('_dmso', '_bort'))
     dr['dr_raw'] = dr['logMFI_dmso'] - dr['logMFI_bort']
-    dr = dr[['prism_replicate','ccle_name','dr_raw']]
-    res = qc.merge(dr, on=['prism_replicate','ccle_name'], how='left')
+    dr = dr[['prism_replicate', 'ccle_name', 'dr_raw']]
+    res = qc.merge(dr, on=['prism_replicate', 'ccle_name'], how='left')
     return res
