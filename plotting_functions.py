@@ -27,7 +27,8 @@ def plot_dynamic_range_norm_raw(df):
                    y='dr',
                    facet_row='pert_plate',
                    facet_col='replicate',
-                   width=1000)
+                   width=1000,
+                   hover_data=['ccle_name'])
     x_line = (0, 6)
     g.update_traces(marker={'size': 4},
                     opacity=0.7)
