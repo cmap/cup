@@ -1,7 +1,9 @@
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
+import scipy
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
@@ -196,16 +198,49 @@ def reshape_df_for_corrplot(df, metric='logMFI_norm'):
     return res
 
 
-def plot_corrplot(df, sub_mfi):
+def make_dimensions_for_corrplot(df, sub_mfi):
     dimensions = []
     for plate in sub_mfi.replicate.unique():
         out = dict(label=plate,
                    values=df[plate])
         dimensions.append(out)
+    print(dimensions)
+    print(type(dimensions))
+    return dimensions
+
+
+def make_dimensions_for_corrtable(df, sub_mfi):
+    dimensions = []
+    for plate in sub_mfi.replicate.unique():
+        out = df[plate]
+        dimensions.append(out)
+    return dimensions
+
+
+def plot_corrplot(df, dim_list):
     g = go.Figure(go.Splom(
-        dimensions=dimensions,
+        dimensions=dim_list,
         showupperhalf=False,
         text=df['perturbation']))
     g.update_layout(height=750,
                     width=750)
     st.plotly_chart(g)
+
+
+def generate_r2_table(dim_list):
+    r_squared = []
+    labels = []
+    for i in range(0, len(dim_list)-1):
+        for s in range(0, len(dim_list)-i):
+            if dim_list[i].name != dim_list[s].name:
+                r2 = round(rsquared(dim_list[i], dim_list[s]),2)
+                r_squared.append(str(r2))
+                label = dim_list[i].name + '/' + dim_list[s].name
+                labels.append(label)
+    res = pd.DataFrame([r_squared], columns=labels)
+    return res.style
+
+
+def rsquared(x, y):
+    slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(x, y)
+    return r_value**2

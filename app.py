@@ -293,10 +293,16 @@ if run and build:
                             with pert_plate:
                                 plate = tab_labels[n]
                                 n += 1
-                                corr = plotting_functions.reshape_df_for_corrplot(mfi[mfi['pert_plate'] == plate])
-                                sub_mfi = mfi[mfi['pert_plate'] == plate]
-                                print(corr.head())
-                                plotting_functions.plot_corrplot(df=corr,
-                                                                 sub_mfi=sub_mfi)
+                                data = mfi[(mfi.pert_plate == plate) & (mfi.culture == cs)]
+                                corr = plotting_functions.reshape_df_for_corrplot(data, metric='logMFI_norm')
+
+                                table_dim = plotting_functions.make_dimensions_for_corrtable(df=corr, sub_mfi=data)
+                                table = plotting_functions.generate_r2_table(dim_list=table_dim)
+                                st.markdown('R<sup>2</sup> values of normalized log2(MFI) data', unsafe_allow_html=True)
+                                st.table(table)
+
+                                dimensions = plotting_functions.make_dimensions_for_corrplot(df=corr,
+                                                                                             sub_mfi=data)
+                                plotting_functions.plot_corrplot(df=corr, dim_list=dimensions)
     else:
         st.text('Build does not exist; check S3.')
