@@ -294,13 +294,11 @@ if run and build:
                                 plate = tab_labels[n]
                                 n += 1
                                 data = mfi[(mfi.pert_plate == plate) & (mfi.culture == cs)]
-                                corr = plotting_functions.reshape_df_for_corrplot(data, metric='logMFI_norm')
+                                corr = plotting_functions.reshape_df_for_corr(data, metric='logMFI_norm')
 
                                 table_dim = plotting_functions.make_dimensions_for_corrtable(df=corr, sub_mfi=data)
-                                table = plotting_functions.generate_r2_table(dim_list=table_dim)
                                 st.markdown('R<sup>2</sup> values of normalized log2(MFI) data', unsafe_allow_html=True)
-                                st.table(table)
-
+                                plotting_functions.mk_corr_table(table_dim, mfi)
                                 dimensions = plotting_functions.make_dimensions_for_corrplot(df=corr,
                                                                                              sub_mfi=data)
                                 plotting_functions.plot_corrplot(df=corr, dim_list=dimensions)

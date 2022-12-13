@@ -3,7 +3,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
-import scipy
+from scipy import stats
+from itertools import combinations
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
@@ -187,7 +188,7 @@ def plot_ssmd_error_rate(df, height):
 
 # REPLICATE CORRELATION
 
-def reshape_df_for_corrplot(df, metric='logMFI_norm'):
+def reshape_df_for_corr(df, metric='logMFI_norm'):
     df['perturbation'] = df['pert_iname'] + ' ' + df['pert_dose'].astype('str')
 
     cols = [metric,
@@ -210,10 +211,10 @@ def make_dimensions_for_corrplot(df, sub_mfi):
 
 
 def make_dimensions_for_corrtable(df, sub_mfi):
-    dimensions = []
+    dimensions = {}
     for plate in sub_mfi.replicate.unique():
-        out = df[plate]
-        dimensions.append(out)
+        out = {plate: df[plate]}
+        dimensions.update(out)
     return dimensions
 
 
@@ -223,24 +224,46 @@ def plot_corrplot(df, dim_list):
         showupperhalf=False,
         text=df['perturbation']))
     g.update_layout(height=750,
-                    width=750)
+                    width=750,
+                    margin=dict(l=10, r=10, t=10, b=10))
     st.plotly_chart(g)
 
 
-def generate_r2_table(dim_list):
-    r_squared = []
-    labels = []
-    for i in range(0, len(dim_list)-1):
-        for s in range(0, len(dim_list)-i):
-            if dim_list[i].name != dim_list[s].name:
-                r2 = round(rsquared(dim_list[i], dim_list[s]),2)
-                r_squared.append(str(r2))
-                label = dim_list[i].name + '/' + dim_list[s].name
-                labels.append(label)
-    res = pd.DataFrame([r_squared], columns=labels)
-    return res.style
-
-
 def rsquared(x, y):
-    slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(x, y)
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
     return r_value**2
+
+
+def mk_corr_table(df, sub_mfi):
+    dimensions = {}
+    for plate in sub_mfi.replicate.unique():
+        out = {plate: df[plate]}
+        dimensions.update(out)
+
+    names = []
+    for replicate in dimensions:
+        names.append(replicate)
+    unique = [",".join(map(str, comb)) for comb in combinations(names, 2)]
+
+    corr_table = pd.DataFrame(columns=['Replicates', 'r2'])
+    for comb in unique:
+        rep_a = comb.split(',')[0]
+        rep_b = comb.split(',')[1]
+        values_a = df[rep_a]
+        values_b = df[rep_b]
+        r2 = round(rsquared(values_a, values_b),2)
+        tmp = pd.DataFrame([[comb, r2]], columns=['Replicates', 'r2'])
+        corr_table = pd.concat([corr_table, tmp])
+
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(corr_table.columns),
+                    fill_color='grey',
+                    align='center'),
+        cells=dict(values=[corr_table.Replicates, corr_table.r2],
+                   fill_color='black',
+                   align='center'))
+    ])
+    fig.update_layout(width=350,
+                      height=115,
+                      margin=dict(l=10, r=10, t=10, b=10))
+    st.plotly_chart(fig, use_container_width=False)
