@@ -1,3 +1,4 @@
+import boto3
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -5,14 +6,18 @@ import streamlit as st
 import numpy as np
 from scipy import stats
 from itertools import combinations
+import seaborn as sns
+import io
+import matplotlib.pyplot as plt
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
 
+
 # DYNAMIC RANGE
 
 
-def plot_dynamic_range(df, metric):
+def plot_dynamic_range(df, metric, build, filename, bucket_name='cup.clue.io'):
     g = px.ecdf(data_frame=df,
                 x=metric,
                 color='prism_replicate')
@@ -21,10 +26,14 @@ def plot_dynamic_range(df, metric):
         xaxis_title="Dynamic range",
         yaxis_title=""
     )
-    st.plotly_chart(g)
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
-def plot_dynamic_range_norm_raw(df):
+def plot_dynamic_range_norm_raw(df, build, filename, bucket_name='cup.clue.io'):
     g = px.scatter(data_frame=df,
                    x='dr_raw',
                    y='dr',
@@ -44,7 +53,12 @@ def plot_dynamic_range_norm_raw(df):
                            showlegend=False),
                 row='all', col='all', exclude_empty_subplots=True)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    st.plotly_chart(g, use_container_width=False)
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
 
 # SSMD
 
@@ -61,10 +75,11 @@ def plot_ssmd(df):
     g.add_vline(x=-2, line_color='red', line_dash='dash', line_width=3)
     st.plotly_chart(g, use_container_width=True)
 
+
 # PASS RATES
 
 
-def plot_pass_rates_by_plate(df):
+def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
     g = px.histogram(data_frame=df,
                      x='prism_replicate',
                      y='pct_pass',
@@ -74,16 +89,24 @@ def plot_pass_rates_by_plate(df):
     g.update_layout(yaxis_range=[0, 100],
                     yaxis_title='Percent pass',
                     xaxis_title='')
-    st.plotly_chart(g, use_container_width=False)
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
-def plot_pass_rates_by_pool(df):
+def plot_pass_rates_by_pool(df, build, filename, bucket_name='cup.clue.io'):
     g = px.histogram(data_frame=df,
                      x='pool_id',
                      y='pass',
                      histfunc='count',
                      color='pass')
-    st.plotly_chart(g, use_container_width=True)
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
 # DISTRIBUTIONS
@@ -231,7 +254,7 @@ def plot_corrplot(df, dim_list):
 
 def rsquared(x, y):
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-    return r_value**2
+    return r_value ** 2
 
 
 def mk_corr_table(df, sub_mfi):
@@ -251,7 +274,7 @@ def mk_corr_table(df, sub_mfi):
         rep_b = comb.split(',')[1]
         values_a = df[rep_a]
         values_b = df[rep_b]
-        r2 = round(rsquared(values_a, values_b),2)
+        r2 = round(rsquared(values_a, values_b), 2)
         tmp = pd.DataFrame([[comb, r2]], columns=['Replicates', 'r2'])
         corr_table = pd.concat([corr_table, tmp])
 
@@ -267,3 +290,26 @@ def mk_corr_table(df, sub_mfi):
                       height=115,
                       margin=dict(l=10, r=10, t=10, b=10))
     st.plotly_chart(fig, use_container_width=False)
+
+
+def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):
+    # TODO: update this plot to separate control bcs and regular bcs
+    g = sns.FacetGrid(data=df[df.pert_type == 'ctl_vehicle'],
+                      row='pert_plate',
+                      col='replicate',
+                      hue='bc_type')
+    g.map(sns.boxplot,
+          'pert_well',
+          'logMFI')
+
+    g.set_xticklabels(rotation=45, fontsize=3)
+    g.set_titles(col_template='{col_var}', row_template='{row_var}')
+
+    # Save plot as PNG to buffer
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+
+    # Upload as PNG to S3
+    s3 = boto3.client('s3')
+    s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
