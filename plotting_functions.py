@@ -360,7 +360,7 @@ def plot_heatmaps(df, metric, build):
     n_cols = len(unique_replicates)
 
     # Create a figure and a grid of subplots
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 5 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3.5 * n_rows))
     fig.subplots_adjust(hspace=0.5, wspace=0.3)
 
     # Create a heatmap for each combination of 'pert_plate' and 'replicate'
@@ -383,6 +383,8 @@ def plot_heatmaps(df, metric, build):
         # Plot the heatmap
         sns.heatmap(heatmap_data, cmap="Blues_r", ax=ax)
         ax.set_title(f"{plate} | {replicate}")
+        ax.set_xlabel('')
+        ax.set_ylabel('')
 
         # Filter the data for the current combination in the second DataFrame
         annotations_data = annots_agg[(annots_agg['pert_plate'] == plate) & (annots_agg['replicate'] == replicate)]
@@ -395,6 +397,8 @@ def plot_heatmaps(df, metric, build):
             for text_col_idx, col in enumerate(annotations_data.columns):
                 ax.text(text_col_idx + 0.5, text_row_idx + 0.5, annotations_data.loc[row, col],
                         ha='center', va='center', fontsize=8, color='black')
+
+        plt.tight_layout()
 
         # Save the plot to a BytesIO object
         img_data = io.BytesIO()
