@@ -312,7 +312,7 @@ def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):
                       legend_out=True)
 
     # Map the boxplot to the FacetGrid
-    g.map(sns.boxplot, 'pert_well', 'logMFI', 'bc_type', linewidth=1.5, hue='bc_type')
+    g.map(sns.boxplot, 'pert_well', 'logMFI', 'bc_type', linewidth=1.5, hue='bc_type', fliersize=0)
 
     # Add row and column titles to the FacetGrid
     for ax in g.axes.flat:
@@ -381,8 +381,10 @@ def plot_heatmaps(df, metric, build):
         heatmap_data = heatmap_data.pivot('row', 'col', metric)
 
         # Plot the heatmap
-        sns.heatmap(heatmap_data, cmap="Blues_r", ax=ax)
+        sns.heatmap(heatmap_data, cmap="Reds_r", ax=ax, vmin=7, vmax=16)
         ax.set_title(f"{plate} | {replicate}")
+        ax.set_xticks(size=3)
+        ax.set_yticks(size=3)
         ax.set_xlabel('')
         ax.set_ylabel('')
 
