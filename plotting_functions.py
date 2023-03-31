@@ -10,6 +10,7 @@ import seaborn as sns
 import io
 import matplotlib.pyplot as plt
 
+
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
 
@@ -122,23 +123,33 @@ def plot_distributions(df, value='logMFI'):
     st.plotly_chart(g)
 
 
-def plot_distributions_by_plate(df, height, value='logMFI'):
-    data = df
+def plot_distributions_by_plate(df, build, filename, pert_types=['trt_poscon', 'ctl_vehicle'],
+                                bucket_name='cup.clue.io', value='logMFI'):
+    data = df[(df.pert_type.isin(pert_types)) & (~df.pert_plate.str.contains('BASE'))]
     controls = ['prism invariant 1', 'prism invariant 10']
     data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle'), 'pert_type'] = \
         data.loc[(data.ccle_name.isin(controls)) & (data.pert_type == 'ctl_vehicle')]['ccle_name']
-    g = px.histogram(data_frame=data,
-                     color='pert_type',
-                     x=value,
-                     barmode='overlay',
-                     histnorm='percent',
-                     facet_col='prism_replicate',
-                     facet_col_wrap=3,
-                     height=height,
-                     nbins=100)
-    g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    g.update_layout(yaxis_title='')
-    st.plotly_chart(g, use_container_width=True)
+    g = sns.FacetGrid(data=data,
+                      hue='pert_type',
+                      col='replicate',
+                      row='pert_plate',
+                      legend_out=True,
+                      aspect=2)
+    g.map(sns.histplot,
+          value)
+
+    g.set_titles(row_template='{row_name}', col_template='{col_name}')
+
+    g.add_legend()
+
+    # Save plot as PNG to buffer
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+
+    # Upload as PNG to S3
+    s3 = boto3.client('s3')
+    s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
 
 
 # BANANA PLOTS
@@ -293,17 +304,29 @@ def mk_corr_table(df, sub_mfi):
 
 
 def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):
-    # TODO: update this plot to separate control bcs and regular bcs
-    g = sns.FacetGrid(data=df[df.pert_type == 'ctl_vehicle'],
+    # Create a FacetGrid with multiple plots
+    g = sns.FacetGrid(df[df.pert_type.isin(['ctl_vehicle'])],
                       row='pert_plate',
                       col='replicate',
-                      hue='bc_type')
-    g.map(sns.boxplot,
-          'pert_well',
-          'logMFI')
+                      height=4, aspect=1.5,
+                      legend_out=True)
 
-    g.set_xticklabels(rotation=45, fontsize=3)
-    g.set_titles(col_template='{col_var}', row_template='{row_var}')
+    # Map the boxplot to the FacetGrid
+    g.map(sns.boxplot, 'pert_well', 'logMFI', 'bc_type', linewidth=1.5, hue='bc_type')
+
+    # Add row and column titles to the FacetGrid
+    for ax in g.axes.flat:
+        ax.set_xlabel('')
+    g.set_titles(col_template='{col_name}', row_template='{row_name}')
+
+    # Set the labels for the x and y axes
+    g.set_axis_labels('', 'logMFI')
+
+    # Rotate the x-axis labels for better readability
+    g.set_xticklabels(rotation=90)
+
+    # Move the legend outside of the plot and create a single legend
+    g.add_legend(title='bc_type', loc='upper right', bbox_to_anchor=(1, 0.5))
 
     # Save plot as PNG to buffer
     buffer = io.BytesIO()
@@ -313,3 +336,72 @@ def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):
     # Upload as PNG to S3
     s3 = boto3.client('s3')
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
+
+
+def plot_heatmaps(df, metric, build):
+    metric = metric
+    df['row'] = df['pert_well'].str[0]
+    df['col'] = df['pert_well'].str[1:3]
+    data = df[~df.pert_plate.str.contains('BASE')][['pert_plate', 'replicate', 'row', 'col', metric]]
+    data_agg = data.groupby(['pert_plate', 'replicate', 'row', 'col']).median().reset_index()
+    combinations = data_agg[['pert_plate', 'replicate']].drop_duplicates()
+
+    annots_agg = df.groupby(['pert_plate', 'replicate', 'row', 'col'])['pert_type'].first().reset_index()
+    annots_agg['pert_type_annot'] = ''
+    annots_agg.loc[annots_agg.pert_type == 'trt_poscon', 'pert_type_annot'] = 'p'
+    annots_agg.loc[annots_agg.pert_type == 'ctl_vehicle', 'pert_type_annot'] = 'v'
+
+    # Find unique pert_plate and replicate values
+    unique_pert_plates = data_agg['pert_plate'].unique()
+    unique_replicates = data_agg['replicate'].unique()
+
+    # Calculate the dimensions of the grid
+    n_rows = len(unique_pert_plates)
+    n_cols = len(unique_replicates)
+
+    # Create a figure and a grid of subplots
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 5 * n_rows))
+    fig.subplots_adjust(hspace=0.5, wspace=0.3)
+
+    # Create a heatmap for each combination of 'pert_plate' and 'replicate'
+    for idx, (index, combo) in enumerate(combinations.iterrows()):
+        plate = combo['pert_plate']
+        replicate = combo['replicate']
+
+        # Find the row and column indices for the current combination
+        row_idx = list(unique_pert_plates).index(plate)
+        col_idx = list(unique_replicates).index(replicate)
+
+        ax = axes[row_idx, col_idx]
+
+        # Filter the data for the current combination
+        heatmap_data = data_agg[(data_agg['pert_plate'] == plate) & (data_agg['replicate'] == replicate)]
+
+        # Pivot the data for the heatmap
+        heatmap_data = heatmap_data.pivot('row', 'col', metric)
+
+        # Plot the heatmap
+        sns.heatmap(heatmap_data, cmap="Blues_r", ax=ax)
+        ax.set_title(f"{plate} | {replicate}")
+
+        # Filter the data for the current combination in the second DataFrame
+        annotations_data = annots_agg[(annots_agg['pert_plate'] == plate) & (annots_agg['replicate'] == replicate)]
+
+        # Pivot the data for the annotations
+        annotations_data = annotations_data.pivot('row', 'col', 'pert_type_annot').dropna()
+
+        # Annotate the heatmap
+        for text_row_idx, row in enumerate(annotations_data.index):
+            for text_col_idx, col in enumerate(annotations_data.columns):
+                ax.text(text_col_idx + 0.5, text_row_idx + 0.5, annotations_data.loc[row, col],
+                        ha='center', va='center', fontsize=8, color='black')
+
+        # Save the plot to a BytesIO object
+        img_data = io.BytesIO()
+        plt.savefig(img_data, format='png')
+        img_data.seek(0)  # Rewind the file pointer to the beginning
+
+        object_key = f"{build}/{metric}_heatmaps.png"  # The desired S3 object key (file name)
+
+        s3 = boto3.client('s3')
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)

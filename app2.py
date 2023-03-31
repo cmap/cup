@@ -135,7 +135,8 @@ if run and build:
     expected_plots = [f"{prefix}/{filename}" for filename in
                       ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
-                       'dmso_perf.png']]
+                       'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png','logMFI_heatmaps.png',
+                       'logMFI_norm_heatmaps.png']]
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
         objects = response['Contents']
@@ -160,12 +161,13 @@ if run and build:
             with by_pool:
                 load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
 
+            # Show pass/fail table
             st.header('Pass/fail table')
             pass_fail = load_df_from_s3('pass_fail_table.csv')
             st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
                 subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
 
-
+            # Plot dynamic range
             st.header('Dynamic range')
             dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
             with dr_norm:
@@ -173,8 +175,25 @@ if run and build:
             with dr_raw:
                 load_plot_from_s3(filename='dr_raw.json', prefix=build)
 
+            # Plot plate distributions
+            st.header('Plate distributions')
+            norm, raw = st.tabs(['Normalized', 'Raw'])
+            with norm:
+                load_image_from_s3('plate_dist_norm.png', prefix=build)
+            with raw:
+                load_image_from_s3('plate_dist_raw.png', prefix=build)
+
+            # Plot DMSO performance
             st.header('DMSO performance')
             load_image_from_s3(filename='dmso_perf.png', prefix=build)
+
+            # Plot heatmaps
+            st.header('logMFI')
+            raw, norm = st.tabs(['Raw', 'Normalized'])
+            with raw:
+                load_image_from_s3(filename='logMFI_heatmaps.png', prefix=build)
+            with norm:
+                load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
 
 ######################################################################################################################
     else:
@@ -249,6 +268,24 @@ if run and build:
                 plotting_functions.plot_dmso_performance(df=mfi_out,
                                                          build=build,
                                                          filename='dmso_perf.png')
+
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI_norm',
+                                                               build=build,
+                                                               filename='plate_dist_norm.png')
+
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI',
+                                                               build=build,
+                                                               filename='plate_dist_raw.png')
+
+                plotting_functions.plot_heatmaps(mfi_out,
+                                                 metric='logMFI',
+                                                 build=build)
+
+                plotting_functions.plot_heatmaps(mfi_out,
+                                                 metric='logMFI_norm',
+                                                 build=build)
 
                 df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
 
