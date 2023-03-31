@@ -383,8 +383,6 @@ def plot_heatmaps(df, metric, build):
         # Plot the heatmap
         sns.heatmap(heatmap_data, cmap="Reds_r", ax=ax, vmin=7, vmax=16)
         ax.set_title(f"{plate} | {replicate}")
-        ax.set_xticks(size=3)
-        ax.set_yticks(size=3)
         ax.set_xlabel('')
         ax.set_ylabel('')
 
