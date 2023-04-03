@@ -1,4 +1,5 @@
 # setup
+import boto3
 import pandas as pd
 import numpy as np
 
@@ -93,7 +94,7 @@ def pivot_dmso_bort(df):
     return res
 
 
-def generate_pass_fail_tbl(mfi, qc):
+def generate_pass_fail_tbl(mfi, qc, prefix, bucket='cup.clue.io'):
     mfi_drop_cols = ['logMFI',
                      'logMFI_norm',
                      'pert_type',
@@ -130,6 +131,14 @@ def generate_pass_fail_tbl(mfi, qc):
                      'Fail dynamic range': fail_dr}
         tmp_df = pd.DataFrame(data=to_append, index=[0])
         res = pd.concat([res, tmp_df])
+
+        # Convert DataFrame to CSV data
+        csv_buffer = res.to_csv(index=False).encode()
+
+        # Upload CSV data to S3 bucket
+        s3 = boto3.client('s3')
+        s3.put_object(Bucket=bucket, Key=f"{prefix}/pass_fail_table.csv", Body=csv_buffer)
+
     return res
 
 
