@@ -247,44 +247,52 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
 
 # REPLICATE CORRELATION
 
-def reshape_df_for_corr(df, metric='logMFI_norm'):
-    df['perturbation'] = df['pert_iname'] + ' ' + df['pert_dose'].astype('str')
 
-    cols = [metric,
-            'replicate',
-            'perturbation']
+def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
+    pert_plates = df['pert_plate'].unique()
+    num_pert_plates = len(pert_plates)
 
-    res = df[cols].pivot_table(index='perturbation', columns='replicate', values=metric).reset_index()
-    return res
+    cols = list(mfi[~mfi.pert_plate.str.contains('BASE')].replicate.unique())
+    num_cols = len(cols)
 
+    max_cols_per_row = 3
+    num_rows = (num_pert_plates + max_cols_per_row - 1) // max_cols_per_row
 
-def make_dimensions_for_corrplot(df, sub_mfi):
-    dimensions = []
-    for plate in sub_mfi.replicate.unique():
-        out = dict(label=plate,
-                   values=df[plate])
-        dimensions.append(out)
-    print(dimensions)
-    print(type(dimensions))
-    return dimensions
+    fig, axes = plt.subplots(nrows=num_cols * num_rows, ncols=num_cols * max_cols_per_row, figsize=(10 * max_cols_per_row, 10 * num_rows), sharex='col', sharey='row')
 
+    # Increase the space between the grids
+    plt.subplots_adjust(wspace=0.5, hspace=0.5)
 
-def make_dimensions_for_corrtable(df, sub_mfi):
-    dimensions = {}
-    for plate in sub_mfi.replicate.unique():
-        out = {plate: df[plate]}
-        dimensions.update(out)
-    return dimensions
+    for idx, pert_plate in enumerate(pert_plates):
+        # Calculate row and col index for the current pert_plate
+        row_idx = idx // max_cols_per_row
+        col_idx = idx % max_cols_per_row
 
+        # Filter dataframe by pert_plate
+        df_filtered = df[df['pert_plate'] == pert_plate]
 
-def plot_corrplot(df, dim_list, filename, build, bucket_name='cup.clue.io'):
-    g = go.Figure(go.Splom(
-        dimensions=dim_list,
-        showupperhalf=False,
-        text=df['perturbation']))
-    g.update_layout(height=750,
-                    width=750,
-                    margin=dict(l=10, r=10, t=10, b=10))
+        for i in range(num_cols):
+            for j in range(num_cols):
+                ax = axes[row_idx * num_cols + i, col_idx * num_cols + j]
+
+                # Calculate the correlation coefficient for the x and y variables
+                corr_coef = np.corrcoef(df_filtered[cols[j]], df_filtered[cols[i]])[0, 1]
+
+                # Create scatter plot
+                ax.scatter(df_filtered[cols[j]], df_filtered[cols[i]], alpha=0.5)
+
+                # Set axis labels
+                if i == num_cols - 1:
+                    ax.set_xlabel(cols[j])
+                if j == 0:
+                    ax.set_ylabel(cols[i])
+
+                # Add the correlation coefficient to the subplot title
+                if i != j:
+                    ax.set_title(f'{corr_coef:.2f}', y=0.5, fontweight='bold')
+
+        # Label each grid with the pert_plate it contains
+        axes[row_idx * num_cols, col_idx * num_cols].set_title(f'{pert_plate}\n' + axes[row_idx * num_cols, col_idx * num_cols].get_title(), x=2, fontweight='bold', size=15)
 
     # Save plot as PNG to buffer
     buffer = io.BytesIO()
@@ -294,46 +302,6 @@ def plot_corrplot(df, dim_list, filename, build, bucket_name='cup.clue.io'):
     # Upload as PNG to S3
     s3 = boto3.client('s3')
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
-
-
-def rsquared(x, y):
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-    return r_value ** 2
-
-
-def mk_corr_table(df, sub_mfi):
-    dimensions = {}
-    for plate in sub_mfi.replicate.unique():
-        out = {plate: df[plate]}
-        dimensions.update(out)
-
-    names = []
-    for replicate in dimensions:
-        names.append(replicate)
-    unique = [",".join(map(str, comb)) for comb in combinations(names, 2)]
-
-    corr_table = pd.DataFrame(columns=['Replicates', 'r2'])
-    for comb in unique:
-        rep_a = comb.split(',')[0]
-        rep_b = comb.split(',')[1]
-        values_a = df[rep_a]
-        values_b = df[rep_b]
-        r2 = round(rsquared(values_a, values_b), 2)
-        tmp = pd.DataFrame([[comb, r2]], columns=['Replicates', 'r2'])
-        corr_table = pd.concat([corr_table, tmp])
-
-    fig = go.Figure(data=[go.Table(
-        header=dict(values=list(corr_table.columns),
-                    fill_color='grey',
-                    align='center'),
-        cells=dict(values=[corr_table.Replicates, corr_table.r2],
-                   fill_color='black',
-                   align='center'))
-    ])
-    fig.update_layout(width=350,
-                      height=115,
-                      margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig, use_container_width=False)
 
 
 def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):

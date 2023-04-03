@@ -135,9 +135,9 @@ if run and build:
     expected_plots = [f"{prefix}/{filename}" for filename in
                       ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
-                       'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png','logMFI_heatmaps.png',
+                       'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png', 'logMFI_heatmaps.png',
                        'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
-                       'dr_er.json']]
+                       'dr_er.json', 'corrplot_raw.png', 'corrplot_norm.png']]
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
         objects = response['Contents']
@@ -158,7 +158,7 @@ if run and build:
             st.header('Pass rates')
             by_plate, by_pool = st.tabs(['By plate', 'By pool'])
             with by_plate:
-                load_plot_from_s3(filename= 'pass_by_plate.json', prefix=build)
+                load_plot_from_s3(filename='pass_by_plate.json', prefix=build)
             with by_pool:
                 load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
 
@@ -212,9 +212,17 @@ if run and build:
             with norm:
                 load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
 
+            # Plot correlations
+            st.header('Correlations')
+            raw, norm = st.tabs(['Raw', 'Normalized'])
+            with raw:
+                load_image_from_s3(filename='corrplot_raw.png', prefix=build)
+            with norm:
+                load_image_from_s3(filename='corrplot_norm.png', prefix=build)
 
 
-######################################################################################################################
+
+    ######################################################################################################################
     else:
         print(f"The necessary plots DO NOT exist, generating output.")
         build_path = "s3://macchiato.clue.io/builds/" + build + "/build/"
@@ -266,14 +274,26 @@ if run and build:
                                 prefix=build,
                                 filename='control_df.csv')
 
+                # Generate replicate correlation df
+
+                corr_df_norm = mfi[~mfi.pert_plate.str.contains('BASE')].pivot_table(columns=['replicate'],
+                                                                                     values='logMFI_norm',
+                                                                                     index=['pert_iname', 'pert_dose',
+                                                                                            'pert_plate']).dropna().reset_index()
+
+                corr_df_raw = mfi[~mfi.pert_plate.str.contains('BASE')].pivot_table(columns=['replicate'],
+                                                                                    values='logMFI',
+                                                                                    index=['pert_iname', 'pert_dose',
+                                                                                           'pert_plate']).dropna().reset_index()
+
                 # Generate and save plots
                 plotting_functions.plot_pass_rates_by_plate(df=qc_out,
                                                             build=build,
                                                             filename='pass_by_plate.json')
 
                 plotting_functions.plot_pass_rates_by_pool(df=qc_out,
-                                                            build=build,
-                                                            filename='pass_by_pool.json')
+                                                           build=build,
+                                                           filename='pass_by_pool.json')
 
                 plotting_functions.plot_dynamic_range(df=qc_out,
                                                       metric='dr',
@@ -327,7 +347,15 @@ if run and build:
                                                       build=build,
                                                       filename='dr_er.json')
 
-                plotting_functions.plot_corrplot()
+                plotting_functions.plot_corrplot(df=corr_df_norm,
+                                                 mfi=mfi,
+                                                 build=build,
+                                                 filename='corrplot_norm.png')
+
+                plotting_functions.plot_corrplot(df=corr_df_raw,
+                                                 mfi=mfi,
+                                                 build=build,
+                                                 filename='corrplot_raw.png')
 
                 df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
 
