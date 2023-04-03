@@ -2,20 +2,16 @@ import logging
 import math
 import os
 from pathlib import Path
-
 import pandas as pd
 import s3fs
 import streamlit as st
-
 import df_transform
 import plotting_functions
 from metadata import prism_metadata
-
 import boto3
 import plotly.io as pio
 import io
-
-import plotly.express as px
+from PIL import Image
 
 logging.basicConfig(filename='./logs/ctg_logs.log')
 logging.debug('This message should go to the log file')
@@ -36,7 +32,6 @@ hide_table_row_index = """
 st.markdown(hide_table_row_index, unsafe_allow_html=True)  # hide table indices while displayed
 
 # AWS/API setup
-# API_URL = os.environ['API_URL']
 API_URL = 'https://api.clue.io/api/'
 API_KEY = os.environ['API_KEY']
 BUILDS_URL = API_URL + 'data_build_types/prism-builds'
@@ -58,16 +53,13 @@ for i in builds:
 
 # USER INPUTS
 
-# build = st.selectbox("Select build", builds_list)
-
-# callback to update query param on selectbox change
 def update_params():
     st.experimental_set_query_params(option=st.session_state.qp)
 
 
 query_params = st.experimental_get_query_params()
 
-# set selectbox value based on query param, or provide a default
+# Set selectbox value based on query param, or provide a default
 ix = 0
 if query_params:
     try:
@@ -79,9 +71,8 @@ build = st.selectbox(
     "Param", builds_list, index=ix, key="qp", on_change=update_params
 )
 
-# set query param based on selection
+# Set query param based on selection
 st.experimental_set_query_params(option=build)
-
 run = st.button('Run')
 
 
@@ -104,7 +95,7 @@ def upload_df_to_s3(df, filename, prefix, bucket_name='cup.clue.io'):
     print(f"File '{filename}' uploaded to bucket '{bucket_name}'")
 
 
-def load_df_from_s3(filename):
+def load_df_from_s3(filename, bucket_name='cup.clue.io'):
     response = s3.get_object(Bucket=bucket_name, Key=f"{build}/{filename}")
     csv_bytes = response['Body'].read()
     csv_buffer = io.StringIO(csv_bytes.decode())
@@ -120,55 +111,122 @@ def load_plot_from_s3(filename, prefix, bucket_name='cup.clue.io'):
     st.plotly_chart(fig)
 
 
+def load_image_from_s3(filename, prefix, bucket_name='cup.clue.io'):
+    s3 = boto3.client('s3')
+    response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+    content = response['Body'].read()
+
+    # Load image data from buffer
+    img_buffer = io.BytesIO(content)
+    img = Image.open(img_buffer)
+
+    # Display image in Streamlit
+    st.image(img)
+
 
 # Inputs
 if run and build:
 
+    # Compare expected plots to files on s3
     s3 = boto3.client('s3')
-    bucket_name = 'cup.clue.io'
+    bucket = 'cup.clue.io'
     prefix = build
-    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-    filenames = ['control_df.csv',
-                 'mfi_out.csv',
-                 'qc_out.csv']
 
-    build_path = "s3://macchiato.clue.io/builds/" + build + "/build/"
-    if fs.exists(build_path):
-        file_list = fs.ls(build_path)
-        qc_file = 's3://' + get_qc_table(file_list)
-        print('QC file found: ' + qc_file)
-        mfi_file = 's3://' + get_lvl3(file_list)
-        print('MFI file found: ' + mfi_file)
+    expected_plots = [f"{prefix}/{filename}" for filename in
+                      ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
+                       'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
+                       'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png','logMFI_heatmaps.png',
+                       'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
+                       'dr_er.json']]
+    response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+    if 'Contents' in response:
+        objects = response['Contents']
+        existing_plots = [obj['Key'] for obj in objects]
+        print(f"Found {len(existing_plots)} objects with prefix '{prefix}' in bucket '{bucket}'")
+    else:
+        print(f"No objects with prefix '{prefix}' found in bucket '{bucket}'")
+        existing_plots = []
 
-        with st.spinner('Generating report...'):
-            # Check if precomputed files exist. If so, read them in. If not, generate them
-            if 'Contents' in response:
-                existing_files = [obj['Key'].split('/')[-1] for obj in response['Contents']]
-                all_files_exist = True
-                for filename in filenames:
-                    if filename not in existing_files:
-                        all_files_exist = False
-                        print(f"File '{filename}' does not exist in bucket '{bucket_name}' with prefix '{prefix}'")
-                        break
-                if all_files_exist:
-                    print(f"All files exist in bucket '{bucket_name}' with prefix '{prefix}'")
-                    # Load existing dataframes
-                    qc_out = load_df_from_s3('qc_out.csv')
-                    mfi_out = load_df_from_s3('mfi_out.csv')
-                    control_df = load_df_from_s3('control_df.csv')
-                    generate_dataframes = False
-                    generate_plots = False
-                else:
-                    print(f"Not all files exist in bucket '{bucket_name}' with prefix '{prefix}', computing dataframes")
-                    generate_dataframes = True
-                    generate_plots = True
-            else:
-                print(f"No objects with prefix '{prefix}' exist in bucket '{bucket_name}', computing dataframes")
-                generate_dataframes = True
-                generate_plots = True
+    if set(expected_plots) == set(existing_plots):
+        print(f"All of the necessary plots already exist, generating output.")
 
-            # Generate the dataframes if necessary
-            if generate_dataframes:
+        with st.spinner('Loading report...'):
+            st.title('PRISM QC report')
+            st.header(build)
+
+            # Plot pass rates
+            st.header('Pass rates')
+            by_plate, by_pool = st.tabs(['By plate', 'By pool'])
+            with by_plate:
+                load_plot_from_s3(filename= 'pass_by_plate.json', prefix=build)
+            with by_pool:
+                load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
+
+            # Show pass/fail table
+            st.header('Pass/fail table')
+            pass_fail = load_df_from_s3('pass_fail_table.csv')
+            st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
+                subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
+
+            # Plot dynamic range
+            st.header('Dynamic range')
+            dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
+            with dr_norm:
+                load_plot_from_s3(filename='dr_norm.json', prefix=build)
+            with dr_raw:
+                load_plot_from_s3(filename='dr_raw.json', prefix=build)
+
+            # Liver plots
+            st.header('Liver plots')
+            load_plot_from_s3(filename='liverplot.json', prefix=build)
+
+            # Banana plots
+            st.header('Banana plots')
+            banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
+            with banana_normalized:
+                load_plot_from_s3('banana_norm.json', prefix=build)
+            with banana_raw:
+                load_plot_from_s3('banana_raw.json', prefix=build)
+
+            # Plot plate distributions
+            st.header('Plate distributions')
+            norm, raw = st.tabs(['Normalized', 'Raw'])
+            with norm:
+                load_image_from_s3('plate_dist_norm.png', prefix=build)
+            with raw:
+                load_image_from_s3('plate_dist_raw.png', prefix=build)
+
+            # Dynamic range versus error rate
+            st.header('Error rate and dynamic range')
+            load_plot_from_s3('dr_er.json', prefix=build)
+
+            # Plot DMSO performance
+            st.header('DMSO performance')
+            load_image_from_s3(filename='dmso_perf.png', prefix=build)
+
+            # Plot heatmaps
+            st.header('logMFI')
+            raw, norm = st.tabs(['Raw', 'Normalized'])
+            with raw:
+                load_image_from_s3(filename='logMFI_heatmaps.png', prefix=build)
+            with norm:
+                load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
+
+
+
+######################################################################################################################
+    else:
+        print(f"The necessary plots DO NOT exist, generating output.")
+        build_path = "s3://macchiato.clue.io/builds/" + build + "/build/"
+        if fs.exists(build_path):
+            file_list = fs.ls(build_path)
+            qc_file = 's3://' + get_qc_table(file_list)
+            print('QC file found: ' + qc_file)
+            mfi_file = 's3://' + get_lvl3(file_list)
+            print('MFI file found: ' + mfi_file)
+
+            with st.spinner('Generating report and uploading results...'):
+
                 # Read data
                 mfi_cols = ['prism_replicate', 'pool_id', 'ccle_name', 'culture', 'pert_type', 'pert_well', 'replicate',
                             'logMFI_norm', 'logMFI', 'pert_plate', 'pert_iname', 'pert_dose']
@@ -202,192 +260,74 @@ if run and build:
                                                   'ccle_name',
                                                   'pert_plate'],
                                               how='left')
+                control_df['replicate'] = control_df['prism_replicate'].str.split('_').str[3]
 
                 upload_df_to_s3(df=control_df,
                                 prefix=build,
                                 filename='control_df.csv')
 
-            # OUTPUT
-            st.title('PRISM QC report')
-            st.header(build)
+                # Generate and save plots
+                plotting_functions.plot_pass_rates_by_plate(df=qc_out,
+                                                            build=build,
+                                                            filename='pass_by_plate.json')
 
-            st.header('Pass rates')
-            st.write(
-                """
-                
-                Passing rates are determined on a plate and cell line basis by a combination of 2 QC metrics, 
-                dynamic range and error rate. 
-                
-                
-                Thresholds are:
+                plotting_functions.plot_pass_rates_by_pool(df=qc_out,
+                                                            build=build,
+                                                            filename='pass_by_pool.json')
 
+                plotting_functions.plot_dynamic_range(df=qc_out,
+                                                      metric='dr',
+                                                      build=build,
+                                                      filename='dr_norm.json')
 
-                **Dynamic range** > -$log{_2}{0.3}$ (~1.74)
+                plotting_functions.plot_dynamic_range(df=qc_out,
+                                                      metric='dr_raw',
+                                                      build=build,
+                                                      filename='dr_raw.json')
 
-                **Error rate** ≤ 0.05
-                
-                Note: there is a third possible failure mode. If 2 replicates fail by the above metrics, the third 
-                replicate will also be flagged as a failure. In this case, that cell line will be excluded from that 
-                plate. 
-               
-                """)
+                plotting_functions.plot_dmso_performance(df=mfi_out,
+                                                         build=build,
+                                                         filename='dmso_perf.png')
 
-            by_plate, by_pool = st.tabs(['By plate', 'By pool'])
-            with by_plate:
-                plotting_functions.plot_pass_rates_by_plate(qc_out)
-            with by_pool:
-                plotting_functions.plot_pass_rates_by_pool(qc_out)
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI_norm',
+                                                               build=build,
+                                                               filename='plate_dist_norm.png')
 
-            st.subheader('Raw pass/fail')
-            st.write(
-                """
-                
-                In this table, the pass rates are calculated without regard to performance within sets of replicates. 
-                Therefore, the numbers you see here may differ slightly from the graphs shown above. However, 
-                this gives a more accurate representation of the performance of individual plates. 
-                
-                """)
-            pass_fail = df_transform.generate_pass_fail_tbl(mfi=mfi_out,
-                                                            qc=qc_out)
-            st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
-                subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI',
+                                                               build=build,
+                                                               filename='plate_dist_raw.png')
 
-            if generate_plots:
-                st.header('QC Metrics')
-                dr, ssmd = st.tabs(['Dynamic range', 'SSMD'])
-                with dr:
-                    dr_norm, dr_raw, dr_comp = st.tabs(['Normalized', 'Raw', 'Comparison'])
-                    with dr_norm:
-                        plotting_functions.plot_dynamic_range(qc_out, 'dr', build=build, filename='dr_norm.json')
-                    with dr_raw:
-                        plotting_functions.plot_dynamic_range(qc_out, 'dr_raw', build=build, filename='dr_raw.json')
-                    with dr_comp:
-                        tab_labels = qc_out.culture.unique().tolist()
-                        n = 0
-                        for assay in st.tabs(tab_labels):
-                            with assay:
-                                assay_type = tab_labels[n]
-                                n += 1
-                                data = qc_out[qc_out.culture == assay_type]
-                                plotting_functions.plot_dynamic_range_norm_raw(data)
-                with ssmd:
-                    plotting_functions.plot_ssmd(qc_out)
+                plotting_functions.plot_heatmaps(mfi_out,
+                                                 metric='logMFI',
+                                                 build=build)
 
-                st.header('Dynamic range & error rate')
-                tab_labels = qc_out.pert_plate.unique().tolist()
-                n = 0
-                for pert_plate in st.tabs(tab_labels):
-                    with pert_plate:
-                        plate = tab_labels[n]
-                        n += 1
-                        data = qc_out[qc_out.pert_plate == plate]
-                        height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                        plotting_functions.plot_ssmd_error_rate(data, height=height)
+                plotting_functions.plot_heatmaps(mfi_out,
+                                                 metric='logMFI_norm',
+                                                 build=build)
 
-                st.header('Banana plots')
-                banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
-                with banana_normalized:
-                    tab_labels = control_df.pert_plate.unique().tolist()
-                    n = 0
-                    for pert_plate in st.tabs(tab_labels):
-                        with pert_plate:
-                            plate = tab_labels[n]
-                            n += 1
-                            data = control_df[control_df.pert_plate == plate]
-                            height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                            plotting_functions.plot_banana_plots(data,
-                                                                 x='ctl_vehicle_med_norm',
-                                                                 y='trt_poscon_med_norm',
-                                                                 height=height)
-                with banana_raw:
-                    tab_labels = control_df.pert_plate.unique().tolist()
-                    n = 0
-                    for pert_plate in st.tabs(tab_labels):
-                        with pert_plate:
-                            plate = tab_labels[n]
-                            n += 1
-                            data = control_df[control_df.pert_plate == plate]
-                            height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                            plotting_functions.plot_banana_plots(data,
-                                                                 x='ctl_vehicle_med',
-                                                                 y='trt_poscon_med',
-                                                                 height=height)
+                plotting_functions.plot_liver_plots(qc_out,
+                                                    build=build,
+                                                    filename='liverplot.json')
 
-                st.header('Liver plots')
-                cs_labels = list(qc_out.culture.unique())
-                n = 0
-                for culture in st.tabs(cs_labels):
-                    with culture:
-                        cell_set = cs_labels[n]
-                        n += 1
-                        plate_labels = list(qc_out.pert_plate.unique())
-                        i = 0
-                        for pert_plate in st.tabs(plate_labels):
-                            with pert_plate:
-                                plate = plate_labels[i]
-                                i += 1
-                                plotting_functions.plot_liver_plots(
-                                    qc_out[(qc_out.pert_plate == plate) & (qc_out.culture == cell_set)])
+                plotting_functions.plot_banana_plots(control_df,
+                                                     build=build,
+                                                     x='ctl_vehicle_med_norm',
+                                                     y='trt_poscon_med_norm',
+                                                     filename='banana_norm.json')
 
-                st.header('Plate distributions')
-                norm, raw = st.tabs(['Normalized', 'Raw'])
-                with norm:
-                    tab_labels = mfi_out.pert_plate.unique().tolist()
-                    n = 0
-                    for pert_plate in st.tabs(tab_labels):
-                        with pert_plate:
-                            plate = tab_labels[n]
-                            n += 1
-                            data = mfi_out[mfi_out.pert_plate == plate]
-                            height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                            plotting_functions.plot_distributions_by_plate(data,
-                                                                           height=height,
-                                                                           value='logMFI_norm')
-                with raw:
-                    tab_labels = mfi_out.pert_plate.unique().tolist()
-                    n = 0
-                    for pert_plate in st.tabs(tab_labels):
-                        with pert_plate:
-                            plate = tab_labels[n]
-                            n += 1
-                            data = mfi_out[mfi_out.pert_plate == plate]
-                            height = math.ceil(data.prism_replicate.unique().shape[0] / 3) * 400
-                            plotting_functions.plot_distributions_by_plate(data,
-                                                                           height=height,
-                                                                           value='logMFI')
-                if mfi.prism_replicate.unique().size > 1:
-                    st.header('Replicate correlations')
-                    cs_labels = list(mfi.culture.unique())
-                    i = 0
-                    for cell_set in st.tabs(cs_labels):
-                        with cell_set:
-                            cs = cs_labels[i]
-                            i += 1
-                            tab_labels = mfi[
-                                (~mfi.pert_plate.str.contains('BASE')) & (mfi.culture == cs)].pert_plate.unique().tolist()
-                            n = 0
-                            for pert_plate in st.tabs(tab_labels):
-                                with pert_plate:
-                                    plate = tab_labels[n]
-                                    n += 1
-                                    data = mfi[(mfi.pert_plate == plate) & (mfi.culture == cs)]
-                                    corr = plotting_functions.reshape_df_for_corr(data, metric='logMFI_norm')
+                plotting_functions.plot_banana_plots(control_df,
+                                                     build=build,
+                                                     x='ctl_vehicle_med',
+                                                     y='trt_poscon_med',
+                                                     filename='banana_raw.json')
 
-                                    table_dim = plotting_functions.make_dimensions_for_corrtable(df=corr, sub_mfi=data)
-                                    st.markdown('R<sup>2</sup> values of normalized log2(MFI) data', unsafe_allow_html=True)
-                                    plotting_functions.mk_corr_table(table_dim, mfi)
-                                    dimensions = plotting_functions.make_dimensions_for_corrplot(df=corr,
-                                                                                                 sub_mfi=data)
-                                    plotting_functions.plot_corrplot(df=corr, dim_list=dimensions)
-            else:
-                st.header('QC Metrics')
-                dr, ssmd, comp = st.tabs(['Dynamic range', 'SSMD'])
-                with dr:
-                    dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
-                    with dr_norm:
-                        load_plot_from_s3(filename='dr_norm.json', prefix=build)
-                    with dr_raw:
-                        load_plot_from_s3(filename='dr_raw.json', prefix=build)
+                plotting_functions.plot_dr_error_rate(qc_out,
+                                                      build=build,
+                                                      filename='dr_er.json')
 
-    else:
-        st.text('Build does not exist; check S3.')
+                df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
+
+        else:
+            st.text('Build does not exist; check S3.')
