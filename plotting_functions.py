@@ -183,7 +183,7 @@ def plot_banana_plots(df, x, y, height):
 
 # LIVER PLOTS
 
-def plot_liver_plots(df):
+def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
     g = px.scatter(data_frame=df,
                    x='ctl_vehicle_md',
                    y='ctl_vehicle_mad',
@@ -191,13 +191,22 @@ def plot_liver_plots(df):
                    marginal_x='histogram',
                    marginal_y='histogram',
                    hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
-                   height=600,
-                   width=800,
+                   height=900,
+                   width=1200,
+                   facet_col='replicate',
+                   facet_row='pert_plate',
                    color_discrete_map={True: '#66ff66',
                                        False: '#ff0000'})
     g.update_traces(marker=dict(opacity=0.75))
     g.for_each_xaxis(lambda xaxis: xaxis.update(showticklabels=True))
-    st.plotly_chart(g)
+
+    g.update_xaxes(title='{col_name}')
+    g.update_yaxes(title='{row_name}')
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
 # ERROR RATE V SSMD

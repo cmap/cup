@@ -136,7 +136,7 @@ if run and build:
                       ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
                        'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png','logMFI_heatmaps.png',
-                       'logMFI_norm_heatmaps.png']]
+                       'logMFI_norm_heatmaps.png', 'liverplot.json']]
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
         objects = response['Contents']
@@ -194,6 +194,12 @@ if run and build:
                 load_image_from_s3(filename='logMFI_heatmaps.png', prefix=build)
             with norm:
                 load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
+
+            # Liver plots
+            st.header('Liver plots')
+            load_plot_from_s3(filename='liverplot.json', prefix=build)
+
+
 
 ######################################################################################################################
     else:
@@ -286,6 +292,10 @@ if run and build:
                 plotting_functions.plot_heatmaps(mfi_out,
                                                  metric='logMFI_norm',
                                                  build=build)
+
+                plotting_functions.plot_liver_plots(qc_out,
+                                                    build=build,
+                                                    filename='liverplot.json')
 
                 df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
 
