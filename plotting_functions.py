@@ -386,7 +386,8 @@ def plot_heatmaps(df, metric, build):
     n_cols = len(unique_replicates)
 
     # Create a figure and a grid of subplots
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3.5 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3.5 * n_rows), squeeze=False)
+    axes = axes.reshape(n_rows, n_cols)
     fig.subplots_adjust(hspace=0.5, wspace=0.3)
 
     # Create a heatmap for each combination of 'pert_plate' and 'replicate'
