@@ -327,6 +327,8 @@ if run and build:
                                                       build=build,
                                                       filename='dr_er.json')
 
+                plotting_functions.plot_corrplot()
+
                 df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
 
         else:

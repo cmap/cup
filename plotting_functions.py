@@ -277,7 +277,7 @@ def make_dimensions_for_corrtable(df, sub_mfi):
     return dimensions
 
 
-def plot_corrplot(df, dim_list):
+def plot_corrplot(df, dim_list, filename, build, bucket_name='cup.clue.io'):
     g = go.Figure(go.Splom(
         dimensions=dim_list,
         showupperhalf=False,
@@ -285,7 +285,15 @@ def plot_corrplot(df, dim_list):
     g.update_layout(height=750,
                     width=750,
                     margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(g)
+
+    # Save plot as PNG to buffer
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+
+    # Upload as PNG to S3
+    s3 = boto3.client('s3')
+    s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
 
 
 def rsquared(x, y):
