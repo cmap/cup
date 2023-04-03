@@ -138,6 +138,8 @@ def plot_distributions_by_plate(df, build, filename, pert_types=['trt_poscon', '
     g.map(sns.histplot,
           value)
 
+    g.set(xlim=(0, None))
+
     g.set_titles(row_template='{row_name}', col_template='{col_name}')
 
     g.add_legend()
@@ -155,15 +157,18 @@ def plot_distributions_by_plate(df, build, filename, pert_types=['trt_poscon', '
 # BANANA PLOTS
 
 
-def plot_banana_plots(df, x, y, height):
-    g = px.scatter(data_frame=df,
+def plot_banana_plots(df, x, y, filename, build, bucket_name = 'cup.clue.io'):
+    data = df[~df.pert_plate.str.contains('BASE')]
+    width = len(data['replicate'].unique()) * 400
+    height = len(data['pert_plate'].unique()) * 225
+    g = px.scatter(data_frame=data,
                    color='bc_type',
-                   facet_col='prism_replicate',
-                   facet_col_wrap=3,
+                   facet_col='replicate',
+                   facet_row='pert_plate',
                    x=x,
                    y=y,
                    hover_data=['ccle_name'],
-                   width=1000,
+                   width=width,
                    height=height)
     g.update_yaxes(matches=None, showticklabels=True)
     g.update_traces(marker={'size': 4},
@@ -178,12 +183,18 @@ def plot_banana_plots(df, x, y, height):
                            showlegend=False),
                 row='all', col='all', exclude_empty_subplots=True)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    st.plotly_chart(g, use_container_width=False)
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
 # LIVER PLOTS
 
 def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
+    width = len(df['replicate'].unique()) * 400
+    height = len(df['pert_plate'].unique()) * 225
     g = px.scatter(data_frame=df,
                    x='ctl_vehicle_md',
                    y='ctl_vehicle_mad',
@@ -191,17 +202,15 @@ def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
                    marginal_x='histogram',
                    marginal_y='histogram',
                    hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
-                   height=900,
-                   width=1200,
+                   height=height,
+                   width=width,
                    facet_col='replicate',
                    facet_row='pert_plate',
                    color_discrete_map={True: '#66ff66',
                                        False: '#ff0000'})
     g.update_traces(marker=dict(opacity=0.75))
     g.for_each_xaxis(lambda xaxis: xaxis.update(showticklabels=True))
-
-    g.update_xaxes(title='{col_name}')
-    g.update_yaxes(title='{row_name}')
+    g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 
     # Upload as json to s3
     s3 = boto3.client('s3')
@@ -211,22 +220,29 @@ def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
 
 # ERROR RATE V SSMD
 
-def plot_ssmd_error_rate(df, height):
-    g = px.scatter(data_frame=df,
-                   facet_col='prism_replicate',
-                   facet_col_wrap=3,
+def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
+    data = df[~df.pert_plate.str.contains('BASE')]
+    width = len(data['replicate'].unique()) * 400
+    height = len(data['pert_plate'].unique()) * 225
+    g = px.scatter(data_frame=data,
+                   facet_col='replicate',
+                   facet_row='pert_plate',
                    color='pass',
                    x='dr',
                    y='error_rate',
                    hover_data=['ccle_name', 'pool_id'],
                    height=height,
-                   width=1000)
+                   width=width)
     g.add_vline(x=dr_threshold, line_color='#d65f5f', line_dash='dash')
     g.add_hline(y=er_threshold, line_color='#d65f5f', line_dash='dash')
     g.update_traces(marker={'size': 4},
                     opacity=0.7)
     g.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    st.plotly_chart(g, use_container_width=False)
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
 # REPLICATE CORRELATION
@@ -340,6 +356,7 @@ def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):
     # Save plot as PNG to buffer
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
+    buffer.seek(0)
     buffer.seek(0)
 
     # Upload as PNG to S3

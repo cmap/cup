@@ -136,7 +136,8 @@ if run and build:
                       ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
                        'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png','logMFI_heatmaps.png',
-                       'logMFI_norm_heatmaps.png', 'liverplot.json']]
+                       'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
+                       'dr_er.json']]
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
         objects = response['Contents']
@@ -175,6 +176,18 @@ if run and build:
             with dr_raw:
                 load_plot_from_s3(filename='dr_raw.json', prefix=build)
 
+            # Liver plots
+            st.header('Liver plots')
+            load_plot_from_s3(filename='liverplot.json', prefix=build)
+
+            # Banana plots
+            st.header('Banana plots')
+            banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
+            with banana_normalized:
+                load_plot_from_s3('banana_norm.json', prefix=build)
+            with banana_raw:
+                load_plot_from_s3('banana_raw.json', prefix=build)
+
             # Plot plate distributions
             st.header('Plate distributions')
             norm, raw = st.tabs(['Normalized', 'Raw'])
@@ -182,6 +195,10 @@ if run and build:
                 load_image_from_s3('plate_dist_norm.png', prefix=build)
             with raw:
                 load_image_from_s3('plate_dist_raw.png', prefix=build)
+
+            # Dynamic range versus error rate
+            st.header('Error rate and dynamic range')
+            load_plot_from_s3('dr_er.json', prefix=build)
 
             # Plot DMSO performance
             st.header('DMSO performance')
@@ -194,10 +211,6 @@ if run and build:
                 load_image_from_s3(filename='logMFI_heatmaps.png', prefix=build)
             with norm:
                 load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
-
-            # Liver plots
-            st.header('Liver plots')
-            load_plot_from_s3(filename='liverplot.json', prefix=build)
 
 
 
@@ -247,6 +260,7 @@ if run and build:
                                                   'ccle_name',
                                                   'pert_plate'],
                                               how='left')
+                control_df['replicate'] = control_df['prism_replicate'].str.split('_').str[3]
 
                 upload_df_to_s3(df=control_df,
                                 prefix=build,
@@ -296,6 +310,22 @@ if run and build:
                 plotting_functions.plot_liver_plots(qc_out,
                                                     build=build,
                                                     filename='liverplot.json')
+
+                plotting_functions.plot_banana_plots(control_df,
+                                                     build=build,
+                                                     x='ctl_vehicle_med_norm',
+                                                     y='trt_poscon_med_norm',
+                                                     filename='banana_norm.json')
+
+                plotting_functions.plot_banana_plots(control_df,
+                                                     build=build,
+                                                     x='ctl_vehicle_med',
+                                                     y='trt_poscon_med',
+                                                     filename='banana_raw.json')
+
+                plotting_functions.plot_dr_error_rate(qc_out,
+                                                      build=build,
+                                                      filename='dr_er.json')
 
                 df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
 
