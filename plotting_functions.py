@@ -265,6 +265,10 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
             f'{pert_plate}\n' + axes[row_idx * num_cols, col_idx * num_cols].get_title(), x=2, fontweight='bold',
             size=18)
 
+    # Adjust the spacing between subplots
+    plt.subplots_adjust(wspace=5, hspace=5)
+
+    # Set tight layout
     plt.tight_layout()
 
     # Save plot as PNG to buffer
