@@ -9,15 +9,15 @@ from itertools import combinations
 import seaborn as sns
 import io
 import matplotlib.pyplot as plt
-
+import plotly.figure_factory as ff
+import plotly.subplots as sp
+import plotly.io as pio
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
 
 
 # DYNAMIC RANGE
-
-
 def plot_dynamic_range(df, metric, build, filename, bucket_name='cup.clue.io'):
     g = px.ecdf(data_frame=df,
                 x=metric,
@@ -61,25 +61,7 @@ def plot_dynamic_range_norm_raw(df, build, filename, bucket_name='cup.clue.io'):
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
-# SSMD
-
-
-def plot_ssmd(df):
-    data = df.sort_values('prism_replicate')
-    g = px.histogram(data, x='ssmd',
-                     color='prism_replicate',
-                     nbins=int(data.pert_plate.unique().shape[0] * 25),
-                     hover_data=['ccle_name'],
-                     facet_col='pert_plate',
-                     facet_col_wrap=2,
-                     barmode='overlay')
-    g.add_vline(x=-2, line_color='red', line_dash='dash', line_width=3)
-    st.plotly_chart(g, use_container_width=True)
-
-
 # PASS RATES
-
-
 def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
     g = px.histogram(data_frame=df,
                      x='prism_replicate',
@@ -111,17 +93,6 @@ def plot_pass_rates_by_pool(df, build, filename, bucket_name='cup.clue.io'):
 
 
 # DISTRIBUTIONS
-
-
-def plot_distributions(df, value='logMFI'):
-    g = px.histogram(data_frame=df,
-                     color='pert_type',
-                     x=value,
-                     barmode='overlay',
-                     histnorm='percent')
-    g.update_layout(yaxis_title='')
-    st.plotly_chart(g)
-
 
 def plot_distributions_by_plate(df, build, filename, pert_types=['trt_poscon', 'ctl_vehicle'],
                                 bucket_name='cup.clue.io', value='logMFI'):
@@ -157,7 +128,7 @@ def plot_distributions_by_plate(df, build, filename, pert_types=['trt_poscon', '
 # BANANA PLOTS
 
 
-def plot_banana_plots(df, x, y, filename, build, bucket_name = 'cup.clue.io'):
+def plot_banana_plots(df, x, y, filename, build, bucket_name='cup.clue.io'):
     data = df[~df.pert_plate.str.contains('BASE')]
     width = len(data['replicate'].unique()) * 400
     height = len(data['pert_plate'].unique()) * 225
@@ -258,10 +229,8 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
     max_cols_per_row = 3
     num_rows = (num_pert_plates + max_cols_per_row - 1) // max_cols_per_row
 
-    fig, axes = plt.subplots(nrows=num_cols * num_rows, ncols=num_cols * max_cols_per_row, figsize=(10 * max_cols_per_row, 10 * num_rows), sharex='col', sharey='row')
-
-    # Increase the space between the grids
-    plt.subplots_adjust(wspace=0.5, hspace=0.5)
+    fig, axes = plt.subplots(nrows=num_cols * num_rows, ncols=num_cols * max_cols_per_row,
+                             figsize=(10 * max_cols_per_row, 10 * num_rows), sharex='col', sharey='row')
 
     for idx, pert_plate in enumerate(pert_plates):
         # Calculate row and col index for the current pert_plate
@@ -292,7 +261,11 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
                     ax.set_title(f'{corr_coef:.2f}', y=0.5, fontweight='bold', size=15)
 
         # Label each grid with the pert_plate it contains
-        axes[row_idx * num_cols, col_idx * num_cols].set_title(f'{pert_plate}\n' + axes[row_idx * num_cols, col_idx * num_cols].get_title(), x=2, fontweight='bold', size=18)
+        axes[row_idx * num_cols, col_idx * num_cols].set_title(
+            f'{pert_plate}\n' + axes[row_idx * num_cols, col_idx * num_cols].get_title(), x=2, fontweight='bold',
+            size=18)
+
+    plt.tight_layout()
 
     # Save plot as PNG to buffer
     buffer = io.BytesIO()
@@ -412,3 +385,39 @@ def plot_heatmaps(df, metric, build):
 
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+
+def plot_historical_perf(df, metric, filename, bucket_name='cup.clue.io'):
+    unique_builds = df['build'].unique()
+    unique_pert_types = df['pert_type'].unique()
+
+    # Create a subplot with two columns
+    fig = sp.make_subplots(cols=2, subplot_titles=unique_pert_types)
+
+    for col, pert_type in enumerate(unique_pert_types, start=1):
+        hist_data = []
+        group_labels = []
+
+        for build in unique_builds:
+            df_filtered = df[(df['pert_type'] == pert_type) & (df['build'] == build)]
+            hist_data.append(df_filtered[metric])
+            group_labels.append(build)  # Use the build as the group label
+
+        # Create the KDE plot for the current pert_type
+        kde_fig = ff.create_distplot(hist_data, group_labels, show_hist=False, show_rug=False)
+
+        # Add traces from kde_fig to the main figure
+        for trace, build in zip(kde_fig.data, unique_builds):
+            trace.showlegend = col == 1  # Only show legend for the first column
+            trace.legendgroup = build  # Set legendgroup to the build
+            fig.add_trace(trace, row=1, col=col)
+
+    # Update the layout
+    fig.update_layout(showlegend=True,
+                      height=500,
+                      width=1200)
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"historical/{filename}", Body=fig_json.encode('utf-8'))

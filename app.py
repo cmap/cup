@@ -124,6 +124,16 @@ def load_image_from_s3(filename, prefix, bucket_name='cup.clue.io'):
     st.image(img)
 
 
+def check_file_exists(bucket_name, file_name):
+    s3 = boto3.client('s3')
+
+    try:
+        s3.head_object(Bucket=bucket_name, Key=file_name)
+        return True
+    except Exception as e:
+        return False
+
+
 # Inputs
 if run and build:
 
@@ -137,7 +147,7 @@ if run and build:
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
                        'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png', 'logMFI_heatmaps.png',
                        'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
-                       'dr_er.json', 'corrplot_raw.png', 'corrplot_norm.png']]
+                       'dr_er.json']]
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
         objects = response['Contents']
@@ -147,7 +157,7 @@ if run and build:
         print(f"No objects with prefix '{prefix}' found in bucket '{bucket}'")
         existing_plots = []
 
-    if set(expected_plots) == set(existing_plots):
+    if set(expected_plots).issubset(set(existing_plots)):
         print(f"All of the necessary plots already exist, generating output.")
 
         with st.spinner('Loading report...'):
@@ -213,13 +223,22 @@ if run and build:
                 load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
 
             # Plot correlations
-            st.header('Correlations')
+
+            if check_file_exists(file_name=f"{build}/corrplot_raw.png", bucket_name='cup.clue.io'):
+                st.header('Correlations')
+                raw, norm = st.tabs(['Raw', 'Normalized'])
+                with raw:
+                    load_image_from_s3(filename='corrplot_raw.png', prefix=build)
+                with norm:
+                    load_image_from_s3(filename='corrplot_norm.png', prefix=build)
+
+            # Compare historical performance
+            st.header('Historical performance')
             raw, norm = st.tabs(['Raw', 'Normalized'])
             with raw:
-                load_image_from_s3(filename='corrplot_raw.png', prefix=build)
+                load_plot_from_s3('historical_mfi_raw.json', prefix='historical')
             with norm:
-                load_image_from_s3(filename='corrplot_norm.png', prefix=build)
-
+                load_plot_from_s3('historical_mfi_norm.json', prefix='historical')
 
 
     ######################################################################################################################
@@ -244,6 +263,47 @@ if run and build:
 
                 qc = pd.read_csv(qc_file, usecols=qc_cols)
                 mfi = pd.read_csv(mfi_file, usecols=mfi_cols)
+
+                # Add to historical df if needed
+                current = mfi[['pert_type', 'logMFI', 'logMFI_norm']].dropna()
+                current = current[current.pert_type.isin(['trt_poscon','ctl_vehicle'])]
+                current['build'] = build
+
+                if check_file_exists(bucket_name='cup.clue.io',
+                                     file_name='historical/historical_mfi.csv'):
+                    response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_mfi.csv')
+                    csv_bytes = response['Body'].read()
+                    csv_buffer = io.StringIO(csv_bytes.decode())
+                    hist = pd.read_csv(csv_buffer)
+
+                    hist_builds = list(hist['build'].unique())
+
+                    if build not in hist_builds:
+                        print(f"Build {build} is being added to historical MFI data")
+                        df = pd.concat([current, hist])
+                        upload_df_to_s3(df,
+                                        prefix='historical',
+                                        filename='historical_mfi.csv')
+                    else:
+                        print(f"Build {build} already exists in historical MFI data, skipping upload")
+                else:
+                    print(f"No historical data found, creating historical MFI csv with {build} data")
+                    upload_df_to_s3(current, filename='historical_mfi.csv', prefix='historical')
+
+                # Download historical data
+                response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_mfi.csv')
+                csv_bytes = response['Body'].read()
+                csv_buffer = io.StringIO(csv_bytes.decode())
+                hist = pd.read_csv(csv_buffer)
+
+                # Make the plot comparing historical performance
+                plotting_functions.plot_historical_perf(df=hist,
+                                                        metric='logMFI',
+                                                        filename='historical_mfi_raw.json')
+
+                plotting_functions.plot_historical_perf(df=hist,
+                                                        metric='logMFI_norm',
+                                                        filename='historical_mfi_norm.json')
 
                 # Transform mfi dataframe and upload to s3
                 mfi_out = mfi.pipe(df_transform.add_bc_type)
@@ -347,12 +407,13 @@ if run and build:
                                                       build=build,
                                                       filename='dr_er.json')
 
-                plotting_functions.plot_corrplot(df=corr_df_norm,
-                                                 mfi=mfi,
-                                                 build=build,
-                                                 filename='corrplot_norm.png')
+                if len(mfi.replicate.unique()) > 1:
+                    plotting_functions.plot_corrplot(df=corr_df_norm,
+                                                     mfi=mfi,
+                                                     build=build,
+                                                     filename='corrplot_norm.png')
 
-                plotting_functions.plot_corrplot(df=corr_df_raw,
+                    plotting_functions.plot_corrplot(df=corr_df_raw,
                                                  mfi=mfi,
                                                  build=build,
                                                  filename='corrplot_raw.png')
