@@ -251,6 +251,11 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
                 # Create scatter plot
                 ax.scatter(df_filtered[cols[j]], df_filtered[cols[i]], alpha=0.5)
 
+                # Add diagonal line
+                min_val = min(ax.get_xlim()[0], ax.get_ylim()[0])
+                max_val = max(ax.get_xlim()[1], ax.get_ylim()[1])
+                ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=1)
+
                 # Set axis labels
                 if i == num_cols - 1:
                     ax.set_xlabel(cols[j])
