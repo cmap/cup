@@ -220,6 +220,7 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
 
 
 def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
+    df = df.sort_values('pert_plate')
     pert_plates = df['pert_plate'].unique()
     num_pert_plates = len(pert_plates)
 
@@ -258,12 +259,12 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
 
                 # Add the correlation coefficient to the subplot title
                 if i != j:
-                    ax.set_title(f'{corr_coef:.2f}', y=0.5, fontweight='bold', size=15)
+                    ax.set_title(f'{corr_coef:.2f}', y=0.5, fontweight='bold', size=25)
 
         # Label each grid with the pert_plate it contains
         axes[row_idx * num_cols, col_idx * num_cols].set_title(
-            f'{pert_plate}\n' + axes[row_idx * num_cols, col_idx * num_cols].get_title(), x=2, fontweight='bold',
-            size=18)
+            f'{pert_plate}\n' + axes[row_idx * num_cols, col_idx * num_cols].get_title(), x=1.7, fontweight='bold',
+            size=20)
 
     # Adjust the spacing between subplots
     plt.subplots_adjust(wspace=5, hspace=5)
