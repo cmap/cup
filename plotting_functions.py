@@ -264,7 +264,7 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
 
                 # Add the correlation coefficient to the subplot title
                 if i != j:
-                    ax.set_title(f'{corr_coef:.2f}', y=0.5, fontweight='bold', size=25)
+                    ax.set_title(f'{corr_coef:.2f}', x=0.2, y=0.75, fontweight='bold', size=25)
 
         # Label each grid with the pert_plate it contains
         axes[row_idx * num_cols, col_idx * num_cols].set_title(
@@ -397,7 +397,7 @@ def plot_heatmaps(df, metric, build):
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
-def plot_historical_perf(df, metric, filename, bucket_name='cup.clue.io'):
+def plot_historical_mfi(df, metric, filename, bucket_name='cup.clue.io'):
     unique_builds = df['build'].unique()
     unique_pert_types = df['pert_type'].unique()
 
