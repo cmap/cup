@@ -460,5 +460,7 @@ elif generate_report and build:
             print(f"Generating pass/fail table.....")
             df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
 
+            print(f"Report generation is complete!")
+
     else:
         st.text('Build does not exist; check S3.')

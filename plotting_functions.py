@@ -131,7 +131,7 @@ def plot_distributions_by_plate(df, build, filename, pert_types=['trt_poscon', '
 def plot_banana_plots(df, x, y, filename, build, bucket_name='cup.clue.io'):
     data = df[~df.pert_plate.str.contains('BASE')]
     width = len(data['replicate'].unique()) * 400
-    height = len(data['pert_plate'].unique()) * 225
+    height = len(data['pert_plate'].unique()) * 350
     g = px.scatter(data_frame=data,
                    color='bc_type',
                    facet_col='replicate',
@@ -165,7 +165,7 @@ def plot_banana_plots(df, x, y, filename, build, bucket_name='cup.clue.io'):
 
 def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
     width = len(df['replicate'].unique()) * 400
-    height = len(df['pert_plate'].unique()) * 225
+    height = len(df['pert_plate'].unique()) * 350
     g = px.scatter(data_frame=df,
                    x='ctl_vehicle_md',
                    y='ctl_vehicle_mad',
@@ -173,7 +173,7 @@ def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
                    marginal_x='histogram',
                    marginal_y='histogram',
                    hover_data=['ccle_name', 'pool_id', 'prism_replicate'],
-                   height=height,
+                    height=height,
                    width=width,
                    facet_col='replicate',
                    facet_row='pert_plate',
@@ -194,7 +194,7 @@ def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
 def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
     data = df[~df.pert_plate.str.contains('BASE')]
     width = len(data['replicate'].unique()) * 400
-    height = len(data['pert_plate'].unique()) * 225
+    height = len(data['pert_plate'].unique()) * 350
     g = px.scatter(data_frame=data,
                    facet_col='replicate',
                    facet_row='pert_plate',
