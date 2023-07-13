@@ -12,6 +12,8 @@ import boto3
 import plotly.io as pio
 import io
 from PIL import Image
+import botocore
+import json
 
 logging.basicConfig(filename='./logs/ctg_logs.log')
 logging.debug('This message should go to the log file')
@@ -108,15 +110,23 @@ def load_plot_from_s3(filename, prefix, bucket_name='cup.clue.io'):
 
 def load_image_from_s3(filename, prefix, bucket_name='cup.clue.io'):
     s3 = boto3.client('s3')
-    response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
-    content = response['Body'].read()
+    try:
+        # Check if the object exists by retrieving metadata
+        s3.head_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
 
-    # Load image data from buffer
-    img_buffer = io.BytesIO(content)
-    img = Image.open(img_buffer)
+        # If the previous line didn't raise an exception, proceed with fetching the actual object
+        response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+        content = response['Body'].read()
 
-    # Display image in Streamlit
-    st.image(img)
+        # Load image data from buffer
+        img_buffer = io.BytesIO(content)
+        img = Image.open(img_buffer)
+
+        # Display image in Streamlit
+        st.image(img)
+
+    except botocore.exceptions.ClientError as e:
+        st.text('There is at least one file missing, please regenerate report and try again.')
 
 
 def check_file_exists(bucket_name, file_name):
@@ -127,6 +137,29 @@ def check_file_exists(bucket_name, file_name):
         return True
     except Exception as e:
         return False
+
+
+def write_json_to_s3(bucket, filename, data, prefix):
+    s3 = boto3.client('s3')
+    # Convert your data to a JSON string
+    json_data = json.dumps(data)
+    # Convert your JSON string to bytes
+    json_bytes = json_data.encode()
+    # Write the JSON data to an S3 object
+    s3.put_object(Body=json_bytes, Bucket=bucket, Key=f"{prefix}/{filename}")
+
+
+def read_json_from_s3(bucket_name, filename, prefix):
+    s3 = boto3.client('s3')
+    # Get the object from S3
+    s3_object = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+    # Get the body of the object (the data content)
+    s3_object_body = s3_object['Body'].read()
+    # Convert bytes to string
+    string_data = s3_object_body.decode('utf-8')
+    # Convert string data to dictionary
+    dict_data = json.loads(string_data)
+    return dict_data
 
 
 # Inputs
@@ -142,7 +175,7 @@ if view_report and build:
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
                        'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png', 'logMFI_heatmaps.png',
                        'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
-                       'dr_er.json', 'pert_type_heatmap.png']]
+                       'dr_er.json', 'metadata.json']]
 
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
@@ -156,13 +189,25 @@ if view_report and build:
     if set(expected_plots).issubset(set(existing_plots)):
         print(f"All of the necessary plots already exist, generating output.")
 
+        # Get list of cultures
+        metadata = read_json_from_s3(bucket_name=bucket,
+                                     filename='metadata.json',
+                                     prefix=build)
+        cultures = metadata['culture']
+
+        # Show report
         with st.spinner('Loading report...'):
             st.title('PRISM QC report')
             st.header(build)
 
             # Show summary heatmaps
             st.header('Heatmaps')
-            load_image_from_s3(filename='pert_type_heatmap.png', prefix=build)
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"{label}_pert_type_heatmap.png"
+                    load_image_from_s3(filename=filename, prefix=build)
 
             # Plot pass rates
             st.header('Pass rates')
@@ -275,10 +320,18 @@ elif generate_report and build:
             print(f"Reading in {lfc_file}.....")
             lfc = pd.read_csv(lfc_file)
 
+            cultures = list(mfi.culture.unique())
+            json_data = {'culture': cultures}
+            filename = 'metadata.json'
+            write_json_to_s3(data=json_data,
+                             bucket=bucket,
+                             prefix=build,
+                             filename='metadata.json')
+
             # Add MFI to historical df if needed
             print(f"Determining if necessary to add {build} to historical MFI data.....")
             current_mfi = mfi[['pert_type', 'logMFI', 'logMFI_norm']].dropna()
-            current_mfi = current_mfi[current_mfi.pert_type.isin(['trt_poscon','ctl_vehicle'])]
+            current_mfi = current_mfi[current_mfi.pert_type.isin(['trt_poscon', 'ctl_vehicle'])]
             current_mfi['build'] = build
 
             if check_file_exists(bucket_name='cup.clue.io',
@@ -308,8 +361,8 @@ elif generate_report and build:
 
             # Add LFC to historical df if needed
             print(f"Determining if necessary to add {build} to historical LFC data.....")
-            controls = ['Nutlin-3a','Nutlin-3','imatinib','Imatinib','AZ-628','bortezomib','DMSO', 'bortezomib']
-            current_lfc = lfc[['LFC','ccle_name','pert_dose','pert_iname','culture']].dropna()
+            controls = ['Nutlin-3a', 'Nutlin-3', 'imatinib', 'Imatinib', 'AZ-628', 'bortezomib', 'DMSO', 'bortezomib']
+            current_lfc = lfc[['LFC', 'ccle_name', 'pert_dose', 'pert_iname', 'culture']].dropna()
             current_lfc = current_lfc.query('pert_iname in @controls')
             current_lfc['build'] = build
 
@@ -337,15 +390,14 @@ elif generate_report and build:
             print(f"Downloading historical LFC data...")
             hist_lfc = load_df_from_s3(filename='historical_lfc.csv', prefix='historical')
 
-
             # Make the plot comparing historical performance
             plotting_functions.plot_historical_mfi(df=hist_mfi,
-                                                    metric='logMFI',
-                                                    filename='historical_mfi_raw.json')
+                                                   metric='logMFI',
+                                                   filename='historical_mfi_raw.json')
 
             plotting_functions.plot_historical_mfi(df=hist_mfi,
-                                                    metric='logMFI_norm',
-                                                    filename='historical_mfi_norm.json')
+                                                   metric='logMFI_norm',
+                                                   filename='historical_mfi_norm.json')
 
             # Transform mfi dataframe and upload to s3
             mfi_out = mfi.pipe(df_transform.add_bc_type)
@@ -464,9 +516,9 @@ elif generate_report and build:
                                                  build=build,
                                                  filename='corrplot_norm.png')
                 plotting_functions.plot_corrplot(df=corr_df_raw,
-                                             mfi=mfi,
-                                             build=build,
-                                             filename='corrplot_raw.png')
+                                                 mfi=mfi,
+                                                 build=build,
+                                                 filename='corrplot_raw.png')
 
             print(f"Generating pass/fail table.....")
             df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)

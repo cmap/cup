@@ -435,61 +435,62 @@ def plot_historical_mfi(df, metric, filename, bucket_name='cup.clue.io'):
 
 
 def make_pert_type_heatmaps(df, build, metric='logMFI'):
-    # Filter and sort dataframe
-    data = df[(~df.ccle_name.str.contains('prism'))&(df.pert_type.isin(['trt_poscon','ctl_vehicle']))]\
-    [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(['pert_type', 'pool_id']).dropna(subset=[metric])
-    data['ccle_pool'] = data.ccle_name + ' ' + data.pool_id
-    # Create pivot table
-    pivot_table = data.pivot_table(
-        values=metric,
-        index=['pool_id'],
-        columns=['pert_type','profile_id'],
-        aggfunc='median')
+    for culture in df.culture.unique():
+        # Filter and sort dataframe
+        data = df[(df.culture == culture)&(~df.ccle_name.str.contains('prism'))&(df.pert_type.isin(['trt_poscon','ctl_vehicle']))]\
+        [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(['pert_type', 'pool_id']).dropna(subset=[metric])
+        data['ccle_pool'] = data.ccle_name + ' ' + data.pool_id
+        # Create pivot table
+        pivot_table = data.pivot_table(
+            values=metric,
+            index=['pool_id'],
+            columns=['pert_type','profile_id'],
+            aggfunc='median')
 
-    # Create a colormap for pool_id
-    unique_pool_ids = pivot_table.index.unique()
-    colors = plt.cm.tab20(np.linspace(0, 1, len(unique_pool_ids))) # use any other colormap if you wish
-    color_dict = dict(zip(unique_pool_ids, range(len(unique_pool_ids))))
+        # Create a colormap for pool_id
+        unique_pool_ids = pivot_table.index.unique()
+        colors = plt.cm.tab20(np.linspace(0, 1, len(unique_pool_ids))) # use any other colormap if you wish
+        color_dict = dict(zip(unique_pool_ids, range(len(unique_pool_ids))))
 
-    # Map pool_ids to integer values
-    color_column = pd.DataFrame([color_dict[pool_id] for pool_id in pivot_table.index],
-                                index=pivot_table.index,
-                                columns=['color'])
+        # Map pool_ids to integer values
+        color_column = pd.DataFrame([color_dict[pool_id] for pool_id in pivot_table.index],
+                                    index=pivot_table.index,
+                                    columns=['color'])
 
-    # Create a colormap from unique integers to colors
-    colormap = ListedColormap(colors)
+        # Create a colormap from unique integers to colors
+        colormap = ListedColormap(colors)
 
-    # Create the subplots
-    fig, (ax1, ax2) = plt.subplots(ncols=2, gridspec_kw={'width_ratios': [0.5, 20]}, figsize=(12, 6))
+        # Create the subplots
+        fig, (ax1, ax2) = plt.subplots(ncols=2, gridspec_kw={'width_ratios': [0.5, 20]}, figsize=(12, 6))
 
-    # Plot the color bar as a heatmap with pool_id as yticklabels
-    sns.heatmap(color_column, ax=ax1, cmap=colormap, cbar=False, yticklabels=True, xticklabels=[])
+        # Plot the color bar as a heatmap with pool_id as yticklabels
+        sns.heatmap(color_column, ax=ax1, cmap=colormap, cbar=False, yticklabels=True, xticklabels=[])
 
-    # Rotate yticklabels for better visibility
-    ax1.yaxis.tick_left()  # Move ticks to the right side of color bar
-    for label in ax1.get_yticklabels():
-        label.set_rotation(0)
+        # Rotate yticklabels for better visibility
+        ax1.yaxis.tick_left()  # Move ticks to the right side of color bar
+        for label in ax1.get_yticklabels():
+            label.set_rotation(0)
 
-    # Plot the main heatmap
-    sns.heatmap(pivot_table, ax=ax2, xticklabels=[], yticklabels=False)
+        # Plot the main heatmap
+        sns.heatmap(pivot_table, ax=ax2, xticklabels=[], yticklabels=False)
 
-    # Remove the space between the plots
-    plt.subplots_adjust(wspace=0.01)
+        # Remove the space between the plots
+        plt.subplots_adjust(wspace=0.01)
 
-    # Remove appropriate labels
-    ax2.set_ylabel('')
-    ax1.set_ylabel('')
-    ax2.set_xlabel('')
+        # Remove appropriate labels
+        ax2.set_ylabel('')
+        ax1.set_ylabel('')
+        ax2.set_xlabel('')
 
-    ax2.annotate("ctl_vehicle", xy=(0.2,1.01), annotation_clip=False, xycoords='axes fraction', textcoords='offset points', xytext=(5,5))
-    ax2.annotate("trt_poscon", xy=(0.69,1.01), annotation_clip=False, xycoords='axes fraction', textcoords='offset points', xytext=(5,5))
+        ax2.annotate("ctl_vehicle", xy=(0.2,1.01), annotation_clip=False, xycoords='axes fraction', textcoords='offset points', xytext=(5,5))
+        ax2.annotate("trt_poscon", xy=(0.69,1.01), annotation_clip=False, xycoords='axes fraction', textcoords='offset points', xytext=(5,5))
 
-    # Save the plot to a BytesIO object
-    img_data = io.BytesIO()
-    plt.savefig(img_data, format='png')
-    img_data.seek(0)  # Rewind the file pointer to the beginning
+        # Save the plot to a BytesIO object
+        img_data = io.BytesIO()
+        plt.savefig(img_data, format='png')
+        img_data.seek(0)  # Rewind the file pointer to the beginning
 
-    object_key = f"{build}/pert_type_heatmap.png"  # The desired S3 object key (file name)
+        object_key = f"{build}/{culture}_pert_type_heatmap.png"  # The desired S3 object key (file name)
 
-    s3 = boto3.client('s3')
-    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+        s3 = boto3.client('s3')
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
