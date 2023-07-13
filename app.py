@@ -142,7 +142,7 @@ if view_report and build:
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
                        'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png', 'logMFI_heatmaps.png',
                        'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
-                       'dr_er.json']]
+                       'dr_er.json', 'pert_type_heatmap.png']]
 
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
@@ -159,6 +159,10 @@ if view_report and build:
         with st.spinner('Loading report...'):
             st.title('PRISM QC report')
             st.header(build)
+
+            # Show summary heatmaps
+            st.header('Heatmaps')
+            load_image_from_s3(filename='pert_type_heatmap.png', prefix=build)
 
             # Plot pass rates
             st.header('Pass rates')
@@ -235,6 +239,9 @@ if view_report and build:
                 load_plot_from_s3('historical_mfi_raw.json', prefix='historical')
             with norm:
                 load_plot_from_s3('historical_mfi_norm.json', prefix='historical')
+    else:
+        st.text('Some content is missing from this report, try generating it again.\
+        \nIf this problem persists after regeneration, bother John!')
 
 elif generate_report and build:
     s3 = boto3.client('s3')
@@ -256,7 +263,7 @@ elif generate_report and build:
 
             # Read data
             mfi_cols = ['prism_replicate', 'pool_id', 'ccle_name', 'culture', 'pert_type', 'pert_well', 'replicate',
-                        'logMFI_norm', 'logMFI', 'pert_plate', 'pert_iname', 'pert_dose']
+                        'logMFI_norm', 'logMFI', 'pert_plate', 'pert_iname', 'pert_dose', 'profile_id']
             qc_cols = ['prism_replicate', 'ccle_name', 'pool_id', 'culture', 'pert_plate', 'ctl_vehicle_md',
                        'trt_poscon_md', 'ctl_vehicle_mad', 'trt_poscon_mad', 'ssmd', 'nnmd', 'error_rate', 'dr',
                        'pass']
@@ -383,6 +390,10 @@ elif generate_report and build:
                                                                                        'pert_plate']).dropna().reset_index()
 
             # Generate and save plots
+            print(f"Generating heatmaps.....")
+            plotting_functions.make_pert_type_heatmaps(df=mfi,
+                                                       build=build)
+
             print(f"Generating pass rate plots.....")
             plotting_functions.plot_pass_rates_by_plate(df=qc_out,
                                                         build=build,
