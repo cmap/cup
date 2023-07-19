@@ -14,6 +14,7 @@ import io
 from PIL import Image
 import botocore
 import json
+import read_build
 
 logging.basicConfig(filename='./logs/ctg_logs.log')
 logging.debug('This message should go to the log file')
@@ -173,9 +174,8 @@ if view_report and build:
     expected_plots = [f"{prefix}/{filename}" for filename in
                       ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
                        'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
-                       'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png', 'logMFI_heatmaps.png',
-                       'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
-                       'dr_er.json', 'metadata.json']]
+                       'dmso_perf.png',
+                       'liverplot.json', 'banana_norm.json', 'banana_raw.json', 'dr_er.json', 'metadata.json']]
 
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
@@ -201,12 +201,48 @@ if view_report and build:
             st.header(build)
 
             # Show summary heatmaps
-            st.header('Heatmaps')
+            st.header('Build heatmaps')
+            st.text('logMFI')
             tab_labels = cultures
             tabs = st.tabs(tab_labels)
             for label, tab in zip(tab_labels, tabs):
                 with tab:
                     filename = f"{label}_pert_type_heatmap.png"
+                    load_image_from_s3(filename=filename, prefix=build)
+
+            st.text('Bead count')
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"{label}_count_heatmap.png"
+                    load_image_from_s3(filename=filename, prefix=build)
+
+            # Show plate heatmaps
+            st.header('Plate heatmaps')
+            st.text('logMFI')
+            raw, norm = st.tabs(['Raw', 'Normalized'])
+            with raw:
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"logMFI_{label}_heatmaps.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+            with norm:
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"logMFI_norm_{label}_heatmaps.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+
+            st.text('Count')
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"count_{label}_heatmaps.png"
                     load_image_from_s3(filename=filename, prefix=build)
 
             # Plot pass rates
@@ -245,11 +281,21 @@ if view_report and build:
 
             # Plot plate distributions
             st.header('Plate distributions')
-            norm, raw = st.tabs(['Normalized', 'Raw'])
-            with norm:
-                load_image_from_s3('plate_dist_norm.png', prefix=build)
+            raw, norm = st.tabs(['Raw', 'Normalized'])
             with raw:
-                load_image_from_s3('plate_dist_raw.png', prefix=build)
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_plate_dist_raw.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+            with norm:
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_plate_dist_norm.png"
+                        load_image_from_s3(filename=filename, prefix=build)
 
             # Dynamic range versus error rate
             st.header('Error rate and dynamic range')
@@ -259,16 +305,7 @@ if view_report and build:
             st.header('DMSO performance')
             load_image_from_s3(filename='dmso_perf.png', prefix=build)
 
-            # Plot heatmaps
-            st.header('logMFI')
-            raw, norm = st.tabs(['Raw', 'Normalized'])
-            with raw:
-                load_image_from_s3(filename='logMFI_heatmaps.png', prefix=build)
-            with norm:
-                load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
-
             # Plot correlations
-
             if check_file_exists(file_name=f"{build}/corrplot_raw.png", bucket_name='cup.clue.io'):
                 st.header('Correlations')
                 raw, norm = st.tabs(['Raw', 'Normalized'])
@@ -306,20 +343,18 @@ elif generate_report and build:
 
         with st.spinner('Generating report and uploading results'):
 
-            # Read data
-            mfi_cols = ['prism_replicate', 'pool_id', 'ccle_name', 'culture', 'pert_type', 'pert_well', 'replicate',
-                        'logMFI_norm', 'logMFI', 'pert_plate', 'pert_iname', 'pert_dose', 'profile_id']
-            qc_cols = ['prism_replicate', 'ccle_name', 'pool_id', 'culture', 'pert_plate', 'ctl_vehicle_md',
-                       'trt_poscon_md', 'ctl_vehicle_mad', 'trt_poscon_mad', 'ssmd', 'nnmd', 'error_rate', 'dr',
-                       'pass']
+            # Read build and create metric dfs
+            df_build = read_build.read_build_from_s3(build)
+            qc = df_build.qc
+            mfi = df_build.mfi
+            lfc = df_build.lfc
+            count = df_build.count
+            inst = df_build.inst
 
-            print(f"Reading in {qc_file}.....")
-            qc = pd.read_csv(qc_file, usecols=qc_cols)
-            print(f"Reading in {mfi_file}.....")
-            mfi = pd.read_csv(mfi_file, usecols=mfi_cols)
-            print(f"Reading in {lfc_file}.....")
-            lfc = pd.read_csv(lfc_file)
+            # Fix count df
+            cnt = df_transform.construct_count_df(count, mfi)
 
+            # Save list of cultures to metadata json
             cultures = list(mfi.culture.unique())
             json_data = {'culture': cultures}
             filename = 'metadata.json'
@@ -442,9 +477,13 @@ elif generate_report and build:
                                                                                        'pert_plate']).dropna().reset_index()
 
             # Generate and save plots
-            print(f"Generating heatmaps.....")
+            print(f"Generating MFI heatmaps.....")
             plotting_functions.make_pert_type_heatmaps(df=mfi,
                                                        build=build)
+
+            print(f"Generating COUNT heatmaps.....")
+            plotting_functions.make_full_count_heatmaps(df=cnt,
+                                                        build=build)
 
             print(f"Generating pass rate plots.....")
             plotting_functions.plot_pass_rates_by_plate(df=qc_out,
@@ -470,21 +509,38 @@ elif generate_report and build:
                                                      filename='dmso_perf.png')
 
             print(f"Generating plate distribution plots.....")
-            plotting_functions.plot_distributions_by_plate(mfi_out,
-                                                           value='logMFI_norm',
-                                                           build=build,
-                                                           filename='plate_dist_norm.png')
-            plotting_functions.plot_distributions_by_plate(mfi_out,
-                                                           value='logMFI',
-                                                           build=build,
-                                                           filename='plate_dist_raw.png')
-            print(f"Generating heatmaps.....")
-            plotting_functions.plot_heatmaps(mfi_out,
-                                             metric='logMFI',
-                                             build=build)
-            plotting_functions.plot_heatmaps(mfi_out,
-                                             metric='logMFI_norm',
-                                             build=build)
+            for culture in cultures:
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI_norm',
+                                                               build=build,
+                                                               filename='plate_dist_norm.png',
+                                                               culture=culture)
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI',
+                                                               build=build,
+                                                               filename='plate_dist_raw.png',
+                                                               culture=culture)
+
+            print(f"Generating plate heatmaps.....")
+            for culture in cultures:
+                plotting_functions.plot_plate_heatmaps(mfi_out,
+                                                       metric='logMFI',
+                                                       build=build,
+                                                       culture=culture)
+                plotting_functions.plot_plate_heatmaps(mfi_out,
+                                                       metric='logMFI_norm',
+                                                       build=build,
+                                                       culture=culture)
+                plotting_functions.plot_plate_heatmaps(cnt,
+                                                       metric='count',
+                                                       by_type=False,
+                                                       build=build,
+                                                       culture=culture)
+                plotting_functions.plot_plate_heatmaps(cnt,
+                                                       metric='count',
+                                                       by_type=False,
+                                                       build=build,
+                                                       culture=culture)
 
             print(f"Generating liver plots.....")
             plotting_functions.plot_liver_plots(qc_out,
