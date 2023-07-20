@@ -194,6 +194,7 @@ if view_report and build:
                                      filename='metadata.json',
                                      prefix=build)
         cultures = metadata['culture']
+        plates = metadata['plates']
 
         # Show report
         with st.spinner('Loading report...'):
@@ -209,6 +210,18 @@ if view_report and build:
                 with tab:
                     filename = f"{label}_pert_type_heatmap.png"
                     load_image_from_s3(filename=filename, prefix=build)
+
+            st.text('logMFI by plate')
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    selected_plates = [plate for plate in plates if label in plate]
+                    for plate in selected_plates:
+                        filename = f"{plate}_{label}_pert_type_heatmap.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+
+
 
             st.text('Bead count')
             tab_labels = cultures
@@ -356,7 +369,10 @@ elif generate_report and build:
 
             # Save list of cultures to metadata json
             cultures = list(mfi.culture.unique())
-            json_data = {'culture': cultures}
+            plates = list(mfi.prism_replicate.unique())
+            json_data = {'culture': cultures,
+                         'plates': plates}
+
             filename = 'metadata.json'
             write_json_to_s3(data=json_data,
                              bucket=bucket,
@@ -436,10 +452,10 @@ elif generate_report and build:
 
             # Transform mfi dataframe and upload to s3
             mfi_out = mfi.pipe(df_transform.add_bc_type)
-            print(f"Uploading {build}/mfi_out.csv to s3.....")
-            upload_df_to_s3(df=mfi_out,
-                            prefix=build,
-                            filename='mfi_out.csv')
+            #print(f"Uploading {build}/mfi_out.csv to s3.....")
+            #upload_df_to_s3(df=mfi_out,
+            #                prefix=build,
+            #                filename='mfi_out.csv')
 
             # Transform qc dataframe and upload to s3
             qc_out = qc.pipe(df_transform.add_pass_rates) \
@@ -477,6 +493,12 @@ elif generate_report and build:
                                                                                        'pert_plate']).dropna().reset_index()
 
             # Generate and save plots
+            print(f"Generating mfi heatmaps by plate/pool.....")
+            for culture in cultures:
+                plotting_functions.make_pert_type_heatmaps_by_plate(df=mfi,
+                                                                    build=build,
+                                                                    culture=culture)
+
             print(f"Generating MFI heatmaps.....")
             plotting_functions.make_pert_type_heatmaps(df=mfi,
                                                        build=build)
