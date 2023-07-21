@@ -172,10 +172,7 @@ if view_report and build:
     prefix = build
 
     expected_plots = [f"{prefix}/{filename}" for filename in
-                      ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
-                       'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
-                       'dmso_perf.png',
-                       'liverplot.json', 'banana_norm.json', 'banana_raw.json', 'dr_er.json', 'metadata.json']]
+                      ['metadata.json']]
 
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
@@ -220,8 +217,6 @@ if view_report and build:
                     for plate in selected_plates:
                         filename = f"{plate}_{label}_pert_type_heatmap.png"
                         load_image_from_s3(filename=filename, prefix=build)
-
-
 
             st.text('Bead count')
             tab_labels = cultures
@@ -328,12 +323,12 @@ if view_report and build:
                     load_image_from_s3(filename='corrplot_norm.png', prefix=build)
 
             # Compare historical performance
-            st.header('Historical performance')
-            raw, norm = st.tabs(['Raw', 'Normalized'])
-            with raw:
-                load_plot_from_s3('historical_mfi_raw.json', prefix='historical')
-            with norm:
-                load_plot_from_s3('historical_mfi_norm.json', prefix='historical')
+            # st.header('Historical performance')
+            # raw, norm = st.tabs(['Raw', 'Normalized'])
+            # with raw:
+            #    load_plot_from_s3('historical_mfi_raw.json', prefix='historical')
+            # with norm:
+            #    load_plot_from_s3('historical_mfi_norm.json', prefix='historical')
     else:
         st.text('Some content is missing from this report, try generating it again.\
         \nIf this problem persists after regeneration, bother John!')
@@ -380,80 +375,80 @@ elif generate_report and build:
                              filename='metadata.json')
 
             # Add MFI to historical df if needed
-            print(f"Determining if necessary to add {build} to historical MFI data.....")
-            current_mfi = mfi[['pert_type', 'logMFI', 'logMFI_norm']].dropna()
-            current_mfi = current_mfi[current_mfi.pert_type.isin(['trt_poscon', 'ctl_vehicle'])]
-            current_mfi['build'] = build
+            # print(f"Determining if necessary to add {build} to historical MFI data.....")
+            # current_mfi = mfi[['pert_type', 'logMFI', 'logMFI_norm']].dropna()
+            # current_mfi = current_mfi[current_mfi.pert_type.isin(['trt_poscon', 'ctl_vehicle'])]
+            # current_mfi['build'] = build
 
-            if check_file_exists(bucket_name='cup.clue.io',
-                                 file_name='historical/historical_mfi.csv'):
-                response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_mfi.csv')
-                csv_bytes = response['Body'].read()
-                csv_buffer = io.StringIO(csv_bytes.decode())
-                hist_mfi = pd.read_csv(csv_buffer)
+            # if check_file_exists(bucket_name='cup.clue.io',
+            #                     file_name='historical/historical_mfi.csv'):
+            #    response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_mfi.csv')
+            #    csv_bytes = response['Body'].read()
+            #    csv_buffer = io.StringIO(csv_bytes.decode())
+            #    hist_mfi = pd.read_csv(csv_buffer)
 
-                hist_builds = list(hist_mfi['build'].unique())
+            #    hist_builds = list(hist_mfi['build'].unique())
 
-                if build not in hist_builds:
-                    print(f"Build {build} is being added to historical MFI data")
-                    df_mfi = pd.concat([current_mfi, hist_mfi])
-                    upload_df_to_s3(df_mfi,
-                                    prefix='historical',
-                                    filename='historical_mfi.csv')
-                else:
-                    print(f"Build {build} already exists in historical MFI data, skipping upload")
-            else:
-                print(f"No historical data found, creating historical MFI csv with {build} data")
-                upload_df_to_s3(current_mfi, filename='historical_mfi.csv', prefix='historical')
+            #    if build not in hist_builds:
+            #        print(f"Build {build} is being added to historical MFI data")
+            #        df_mfi = pd.concat([current_mfi, hist_mfi])
+            #        upload_df_to_s3(df_mfi,
+            #                        prefix='historical',
+            #                        filename='historical_mfi.csv')
+            #    else:
+            #        print(f"Build {build} already exists in historical MFI data, skipping upload")
+            # else:
+            #    print(f"No historical data found, creating historical MFI csv with {build} data")
+            #    upload_df_to_s3(current_mfi, filename='historical_mfi.csv', prefix='historical')
 
             # Download historical data
-            hist_mfi = load_df_from_s3(filename='historical_mfi.csv', prefix='historical')
-            print(f"Historical MFI data downloaded.....")
+            # hist_mfi = load_df_from_s3(filename='historical_mfi.csv', prefix='historical')
+            # print(f"Historical MFI data downloaded.....")
 
             # Add LFC to historical df if needed
-            print(f"Determining if necessary to add {build} to historical LFC data.....")
-            controls = ['Nutlin-3a', 'Nutlin-3', 'imatinib', 'Imatinib', 'AZ-628', 'bortezomib', 'DMSO', 'bortezomib']
-            current_lfc = lfc[['LFC', 'ccle_name', 'pert_dose', 'pert_iname', 'culture']].dropna()
-            current_lfc = current_lfc.query('pert_iname in @controls')
-            current_lfc['build'] = build
+            # print(f"Determining if necessary to add {build} to historical LFC data.....")
+            # controls = ['Nutlin-3a', 'Nutlin-3', 'imatinib', 'Imatinib', 'AZ-628', 'bortezomib', 'DMSO', 'bortezomib']
+            # current_lfc = lfc[['LFC', 'ccle_name', 'pert_dose', 'pert_iname', 'culture']].dropna()
+            # current_lfc = current_lfc.query('pert_iname in @controls')
+            # current_lfc['build'] = build
 
-            if check_file_exists(bucket_name='cup.clue.io',
-                                 file_name='historical/historical_lfc.csv'):
-                response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_lfc.csv')
-                csv_bytes = response['Body'].read()
-                csv_buffer = io.StringIO(csv_bytes.decode())
-                hist_lfc = pd.read_csv(csv_buffer)
-                hist_builds = list(hist_lfc['build'].unique())
+            # if check_file_exists(bucket_name='cup.clue.io',
+            #                     file_name='historical/historical_lfc.csv'):
+            #    response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_lfc.csv')
+            #    csv_bytes = response['Body'].read()
+            #    csv_buffer = io.StringIO(csv_bytes.decode())
+            #    hist_lfc = pd.read_csv(csv_buffer)
+            #    hist_builds = list(hist_lfc['build'].unique())
 
-                if build not in hist_builds:
-                    print(f"Build {build} is being added to historical LFC data")
-                    df_lfc = pd.concat([current_lfc, hist_lfc])
-                    upload_df_to_s3(df_lfc,
-                                    prefix='historical',
-                                    filename='historical_lfc.csv')
-                else:
-                    print(f"Build {build} already exists in historical LFC data, skipping upload.")
-            else:
-                print(f"No historical data found, creating historical LFC csv with {build} data")
-                upload_df_to_s3(current_lfc, filename='historical_lfc.csv', prefix='historical')
+            #    if build not in hist_builds:
+            #        print(f"Build {build} is being added to historical LFC data")
+            #        df_lfc = pd.concat([current_lfc, hist_lfc])
+            #        upload_df_to_s3(df_lfc,
+            #                        prefix='historical',
+            #                        filename='historical_lfc.csv')
+            #    else:
+            #        print(f"Build {build} already exists in historical LFC data, skipping upload.")
+            # else:
+            #    print(f"No historical data found, creating historical LFC csv with {build} data")
+            #    upload_df_to_s3(current_lfc, filename='historical_lfc.csv', prefix='historical')
 
             # Download historical data
-            print(f"Downloading historical LFC data...")
-            hist_lfc = load_df_from_s3(filename='historical_lfc.csv', prefix='historical')
+            # print(f"Downloading historical LFC data...")
+            # hist_lfc = load_df_from_s3(filename='historical_lfc.csv', prefix='historical')
 
             # Make the plot comparing historical performance
-            plotting_functions.plot_historical_mfi(df=hist_mfi,
-                                                   metric='logMFI',
-                                                   filename='historical_mfi_raw.json')
+            # plotting_functions.plot_historical_mfi(df=hist_mfi,
+            #                                       metric='logMFI',
+            #                                       filename='historical_mfi_raw.json')
 
-            plotting_functions.plot_historical_mfi(df=hist_mfi,
-                                                   metric='logMFI_norm',
-                                                   filename='historical_mfi_norm.json')
+            # plotting_functions.plot_historical_mfi(df=hist_mfi,
+            #                                       metric='logMFI_norm',
+            #                                       filename='historical_mfi_norm.json')
 
             # Transform mfi dataframe and upload to s3
             mfi_out = mfi.pipe(df_transform.add_bc_type)
-            #print(f"Uploading {build}/mfi_out.csv to s3.....")
-            #upload_df_to_s3(df=mfi_out,
+            # print(f"Uploading {build}/mfi_out.csv to s3.....")
+            # upload_df_to_s3(df=mfi_out,
             #                prefix=build,
             #                filename='mfi_out.csv')
 
@@ -565,10 +560,12 @@ elif generate_report and build:
                                                        culture=culture)
 
             print(f"Generating liver plots.....")
-            plotting_functions.plot_liver_plots(qc_out,
-                                                build=build,
-                                                filename='liverplot.json')
-
+            try:
+                plotting_functions.plot_liver_plots(qc_out,
+                                                    build=build,
+                                                    filename='liverplot.json')
+            except:
+                print("Could not generate liver plots.")
             print(f"Generating banana plots.....")
             plotting_functions.plot_banana_plots(control_df,
                                                  build=build,
@@ -583,9 +580,12 @@ elif generate_report and build:
                                                  filename='banana_raw.json')
 
             print(f"Generating error rate plot.....")
-            plotting_functions.plot_dr_error_rate(qc_out,
-                                                  build=build,
-                                                  filename='dr_er.json')
+            try:
+                plotting_functions.plot_dr_error_rate(qc_out,
+                                                      build=build,
+                                                      filename='dr_er.json')
+            except:
+                print(f"Error generating error rate plot.")
 
             print(f"There are multiple replicates, generating correlation plots.....")
             if len(mfi.replicate.unique()) > 1:
