@@ -1,0 +1,66 @@
+build_heatmap_ctl_mfi = 'This heatmap shows the un-normalized median logMFI value for each pool within each detection ' \
+                        'well across all control wells in the build. Rows are different pools, while columns are ' \
+                        'detection plate wells sorted by plate and well_id. This plot is intended to allow us to pick up ' \
+                        'any gross treatment plate based issues such as apparent killing by our vehicle control, ' \
+                        'failure to kill by our positive control(s), or an issue with the lysis or collapse of a given ' \
+                        'treatment plate.'
+
+plate_heatmap_ctl_mfi = 'These heatmaps are subsets of the above heatmaps faceted by detection plate. They are intended ' \
+                        'to allow closer inspection of potential issues.'
+
+build_heatmap_count = 'A build-wide assessment of bead counts. The rows here are detection plates, while the columns ' \
+                      'are wells. This plot is useful for identifying cross-bead related issues that may be caused by ' \
+                      'instrumentation errors such as the failure to add bead to a well, bead removal during the ' \
+                      'staining and cleanup process, scanner clogs or laser failures. The scale here ends at 30, ' \
+                      'as we are perfectly happy with counts greater than that.'
+
+plate_heatmap_mfi = 'These heatmaps are intended to give plate-wide overviews of median signal. The values are the ' \
+                    'median logMFI across all non-control barcodes in a well. Note that vehicle controls and positive ' \
+                    'controls are annotated with *v* and *p* respectively.'
+
+plate_heatmap_count = 'These heatmaps show plate views of the median bead counts for non-control barcodes in each ' \
+                      'well. It is intended to help diagnose instrumentation issues such as clogged tips, ' \
+                      'scanner clogs, or bead washout.'
+
+ctl_quantiles = 'These line plots are intended to give us an idea of how evenly our control barcodes are spanning the ' \
+                'range of our cell line bar codes. The x-axis are our control analytes (1-10) and the y-axis is the ' \
+                'quantile of all cell line barcodes that the given median control barcode falls into. Note that this ' \
+                'is limited to vehicle wells. The ideal distribution is signified by the dashed line on the plot.'
+
+dr_and_er = 'Dynamic range and error rate are the two key QC metrics that we use when determining whether or not a ' \
+            'cell line passes or fails on a given detection plate. **Dynamic range** is given by the difference ' \
+            'between the logMFI of the vehicle control and the positive control. The **error rate** is a measure of the ' \
+            'overlap between the positive and negative control values for each cell line and is given as **ER = (FP - FN)/n** ' \
+            'where FP is the false positive rate, FN is the false negative rate, and n is the total number of controls.'
+
+pass_by_plate = 'Fractions of cell lines within each detection plate that pass our thresholds for both dynamic range ' \
+                'and error rate.'
+
+pass_by_pool = 'Total number of cell lines that pass or fail by pool. This is useful for picking our particularly ' \
+               'problematic pools.'
+
+pass_table = 'This table shows the pass and failure rates for cell lines on each detection plate, as well as ' \
+             'highlighting the reason for failure (dynamic range or error rate).'
+
+dr_ecdf = 'Cumulative distribution plot of dynamic range values for each detection plate. Note that there are both ' \
+          'pre and post normalized versions of these data.'
+
+liver_plots = 'These plots compare the mean absolute deviation (MAD) to the median of the vehicle signal for each ' \
+              'cell line in each replicate. Plates are colored by their QC status. This can help to assess potential ' \
+              'reasons for failure (was it due to low signal, high variability etc).'
+
+banana_plots = 'These plots compare the median logMFI value of vehicle samples to the median logMFI value of the ' \
+               'positive control samples within each plate and for each cell line. Cell lines are highlighted in ' \
+               'blue, while control barcodes are highlighted in red. These plots are helpful for comparing overall ' \
+               'brightness for both sets of controls and their relationship to the control barocdes.  Note that there ' \
+               'are both pre and post-normalzied versions of these plots.'
+
+plate_dists = 'Simple distributions of logMFI values for vehicle controls and positive controls. These plots can be ' \
+              'used to get a feel for the separation between the two and can be investigated for signs of signal ' \
+              'hittingt the assay ceiling or the noise floor. It is also useful to compare overall signal intensity ' \
+              'across plates.'
+
+dr_vs_er = 'Dynamic range versus error rate for each cell line on each detection plate.'
+
+corr = 'Correlation of logMFI values across replicates. These correlations are calculated on a per compound/dose ' \
+       'level across all cell line barcodes. This means that each point on this plot represents a given compound/dose.'

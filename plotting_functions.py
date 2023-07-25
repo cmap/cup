@@ -13,6 +13,7 @@ import plotly.figure_factory as ff
 import plotly.subplots as sp
 import plotly.io as pio
 from matplotlib.colors import ListedColormap
+import df_transform
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
@@ -633,3 +634,63 @@ def make_pert_type_heatmaps_by_plate(df, build, culture, metric='logMFI'):
 
             s3 = boto3.client('s3')
             s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+
+def generate_cbc_quantile_plot(df, build, culture):
+    # Filter and get unique values
+    unique_values = df.prism_replicate[(~df.prism_replicate.str.contains('BASE')) & (df.culture == culture)].unique()
+
+    # Determine rows and columns
+    total_plots = len(unique_values)
+    rows = np.ceil(total_plots / 3).astype(int)  # round up to get enough rows
+
+    # Create subplots
+    fig, axes = plt.subplots(rows, 3, figsize=(10, rows * 3.33))  # Adjust size as needed
+    axes = axes.ravel()  # Flatten the axes array
+
+    # Create a plot for each unique value
+    for i in range(total_plots):
+        subset = df[(df.prism_replicate == unique_values[i]) & (df.culture == culture) & (df.pert_type.isin(['ctl_vehicle', 'ctl_untrt']))]
+
+        # calculate the median for each control barcode
+        cbc = subset[subset.ccle_name.str.contains('prism invariant')]
+        cbc_med = cbc[['ccle_name','logMFI']].groupby(['ccle_name']).median()
+
+        # get the logMFI values for cell_line
+        cl = subset[~subset.ccle_name.str.contains('prism invariant')]['logMFI']
+
+        # apply function to determine quantiles
+        quantiles_bc = cbc_med['logMFI'].apply(lambda x: df_transform.quantile_of_closest_score(x, cl))
+
+        # make dataframe
+        data = pd.DataFrame(quantiles_bc).reset_index().rename(columns={'ccle_name':'bead',
+                                                                        'logMFI':'quantile'})
+
+        # sort data
+        data['sort'] = data['bead'].str.split(' ').str[2].astype('int')
+        data.sort_values('sort', inplace=True)
+
+        # make plots
+        sns.lineplot(data=data, ax=axes[i], x = 'sort', y='quantile')  # Replace with your function
+        axes[i].set_title(f'{unique_values[i]}')  # Optional title for each subplot
+        axes[i].plot([0,10],[0,1], color='grey', linestyle='--')
+        axes[i].set_xlabel('')
+        axes[i].set_ylabel('')
+
+    # If total plots < axes, remove the extras
+    if total_plots % 3 != 0:  # We have some empty subplots
+        for i in range(total_plots, len(axes)):  # Loop from last plot index to end of axes
+            fig.delaxes(axes[i])  # Remove the extra subplots
+
+    # Set tight layout
+    plt.tight_layout()
+
+    # Save the plot to a BytesIO object
+    img_data = io.BytesIO()
+    plt.savefig(img_data, format='png')
+    img_data.seek(0)  # Rewind the file pointer to the beginning
+
+    object_key = f"{build}/{culture}_cb_quantiles.png"  # The desired S3 object key (file name)
+
+    s3 = boto3.client('s3')
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)

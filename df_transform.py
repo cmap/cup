@@ -164,3 +164,9 @@ def construct_count_df(count, mfi):
                       right_on=['rid', 'profile_id'], how='left').dropna()
     res.rename(columns={'value':'count'}, inplace=True)
     return res
+
+
+# Define a function that will return the quantile of a given value in the cell_line_logMFI distribution
+def quantile_of_closest_score(value, scores):
+    closest_value_index = (np.abs(scores - value)).argmin()
+    return pd.Series(scores).rank(pct=True).iloc[closest_value_index]

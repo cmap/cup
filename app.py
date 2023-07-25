@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import s3fs
 import streamlit as st
+import descriptions
 import df_transform
 import plotting_functions
 from metadata import prism_metadata
@@ -196,11 +197,12 @@ if view_report and build:
         # Show report
         with st.spinner('Loading report...'):
             st.title('PRISM QC report')
-            st.header(build)
+            st.title(build)
 
             # Show summary heatmaps
             st.header('Build heatmaps')
-            st.text('logMFI')
+            st.subheader('logMFI')
+            st.markdown(descriptions.build_heatmap_ctl_mfi)
             tab_labels = cultures
             tabs = st.tabs(tab_labels)
             for label, tab in zip(tab_labels, tabs):
@@ -208,7 +210,8 @@ if view_report and build:
                     filename = f"{label}_pert_type_heatmap.png"
                     load_image_from_s3(filename=filename, prefix=build)
 
-            st.text('logMFI by plate')
+            st.subheader('logMFI by plate')
+            st.markdown(descriptions.plate_heatmap_ctl_mfi)
             tab_labels = cultures
             tabs = st.tabs(tab_labels)
             for label, tab in zip(tab_labels, tabs):
@@ -218,7 +221,8 @@ if view_report and build:
                         filename = f"{plate}_{label}_pert_type_heatmap.png"
                         load_image_from_s3(filename=filename, prefix=build)
 
-            st.text('Bead count')
+            st.subheader('Bead count')
+            st.markdown(descriptions.build_heatmap_count)
             tab_labels = cultures
             tabs = st.tabs(tab_labels)
             for label, tab in zip(tab_labels, tabs):
@@ -228,7 +232,8 @@ if view_report and build:
 
             # Show plate heatmaps
             st.header('Plate heatmaps')
-            st.text('logMFI')
+            st.subheader('logMFI')
+            st.markdown(descriptions.plate_heatmap_mfi)
             raw, norm = st.tabs(['Raw', 'Normalized'])
             with raw:
                 tab_labels = cultures
@@ -245,7 +250,8 @@ if view_report and build:
                         filename = f"logMFI_norm_{label}_heatmaps.png"
                         load_image_from_s3(filename=filename, prefix=build)
 
-            st.text('Count')
+            st.subheader('Count')
+            st.markdown(descriptions.plate_heatmap_count)
             tab_labels = cultures
             tabs = st.tabs(tab_labels)
             for label, tab in zip(tab_labels, tabs):
@@ -253,22 +259,37 @@ if view_report and build:
                     filename = f"count_{label}_heatmaps.png"
                     load_image_from_s3(filename=filename, prefix=build)
 
+            # control barcode quantiles
+            st.header('Control barcode performance')
+            st.markdown(descriptions.ctl_quantiles)
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"{label}_cb_quantiles.png"
+                    load_image_from_s3(filename=filename, prefix=build)
+
             # Plot pass rates
             st.header('Pass rates')
+            st.markdown(descriptions.dr_and_er)
             by_plate, by_pool = st.tabs(['By plate', 'By pool'])
             with by_plate:
+                st.markdown(descriptions.pass_by_plate)
                 load_plot_from_s3(filename='pass_by_plate.json', prefix=build)
             with by_pool:
+                st.markdown(descriptions.pass_by_pool)
                 load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
 
             # Show pass/fail table
-            st.header('Pass/fail table')
+            st.subheader('Pass/fail table')
+            st.markdown(descriptions.pass_table)
             pass_fail = load_df_from_s3('pass_fail_table.csv', prefix=build)
             st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
                 subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
 
             # Plot dynamic range
             st.header('Dynamic range')
+            st.markdown(descriptions.dr_ecdf)
             dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
             with dr_norm:
                 load_plot_from_s3(filename='dr_norm.json', prefix=build)
@@ -277,10 +298,12 @@ if view_report and build:
 
             # Liver plots
             st.header('Liver plots')
+            st.markdown(descriptions.liver_plots)
             load_plot_from_s3(filename='liverplot.json', prefix=build)
 
             # Banana plots
             st.header('Banana plots')
+            st.markdown(descriptions.banana_plots)
             banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
             with banana_normalized:
                 load_plot_from_s3('banana_norm.json', prefix=build)
@@ -289,6 +312,7 @@ if view_report and build:
 
             # Plot plate distributions
             st.header('Plate distributions')
+            st.markdown(descriptions.plate_dists)
             raw, norm = st.tabs(['Raw', 'Normalized'])
             with raw:
                 tab_labels = cultures
@@ -307,16 +331,18 @@ if view_report and build:
 
             # Dynamic range versus error rate
             st.header('Error rate and dynamic range')
+            st.markdown(descriptions.dr_vs_er)
             load_plot_from_s3('dr_er.json', prefix=build)
 
             # Plot DMSO performance
-            st.header('DMSO performance')
-            load_image_from_s3(filename='dmso_perf.png', prefix=build)
+            #st.header('DMSO performance')
+            #load_image_from_s3(filename='dmso_perf.png', prefix=build)
 
             # Plot correlations
             if check_file_exists(file_name=f"{build}/corrplot_raw.png", bucket_name='cup.clue.io'):
                 st.header('Correlations')
-                raw, norm = st.tabs(['Raw', 'Normalized'])
+                st.markdown(descriptions.corr)
+                norm, raw = st.tabs(['Normalized', 'Raw'])
                 with raw:
                     load_image_from_s3(filename='corrplot_raw.png', prefix=build)
                 with norm:
@@ -488,6 +514,12 @@ elif generate_report and build:
                                                                                        'pert_plate']).dropna().reset_index()
 
             # Generate and save plots
+            print("Generating control barcode quantile plots....")
+            for culture in cultures:
+                plotting_functions.generate_cbc_quantile_plot(df=mfi,
+                                                              build=build,
+                                                              culture=culture)
+
             print(f"Generating mfi heatmaps by plate/pool.....")
             for culture in cultures:
                 plotting_functions.make_pert_type_heatmaps_by_plate(df=mfi,
