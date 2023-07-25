@@ -154,3 +154,19 @@ def append_raw_dr(mfi, qc):
     dr = dr[['prism_replicate', 'ccle_name', 'dr_raw']]
     res = qc.merge(dr, on=['prism_replicate', 'ccle_name'], how='left')
     return res
+
+
+def construct_count_df(count, mfi):
+    count['culture'] = count['cid'].str.split('_').str[1]
+    count.loc[count.culture == 'PR300P', 'culture'] = 'PR300'
+    count['rid'] = count['rid'] + '_' + count['culture']
+    res = count.merge(mfi[['profile_id', 'rid', 'prism_replicate', 'pool_id', 'pert_well', 'pert_plate', 'replicate']], left_on=['rid', 'cid'],
+                      right_on=['rid', 'profile_id'], how='left').dropna()
+    res.rename(columns={'value':'count'}, inplace=True)
+    return res
+
+
+# Define a function that will return the quantile of a given value in the cell_line_logMFI distribution
+def quantile_of_closest_score(value, scores):
+    closest_value_index = (np.abs(scores - value)).argmin()
+    return pd.Series(scores).rank(pct=True).iloc[closest_value_index]

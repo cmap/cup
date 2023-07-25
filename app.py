@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import s3fs
 import streamlit as st
+import descriptions
 import df_transform
 import plotting_functions
 from metadata import prism_metadata
@@ -12,6 +13,9 @@ import boto3
 import plotly.io as pio
 import io
 from PIL import Image
+import botocore
+import json
+import read_build
 
 logging.basicConfig(filename='./logs/ctg_logs.log')
 logging.debug('This message should go to the log file')
@@ -108,15 +112,23 @@ def load_plot_from_s3(filename, prefix, bucket_name='cup.clue.io'):
 
 def load_image_from_s3(filename, prefix, bucket_name='cup.clue.io'):
     s3 = boto3.client('s3')
-    response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
-    content = response['Body'].read()
+    try:
+        # Check if the object exists by retrieving metadata
+        s3.head_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
 
-    # Load image data from buffer
-    img_buffer = io.BytesIO(content)
-    img = Image.open(img_buffer)
+        # If the previous line didn't raise an exception, proceed with fetching the actual object
+        response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+        content = response['Body'].read()
 
-    # Display image in Streamlit
-    st.image(img)
+        # Load image data from buffer
+        img_buffer = io.BytesIO(content)
+        img = Image.open(img_buffer)
+
+        # Display image in Streamlit
+        st.image(img)
+
+    except botocore.exceptions.ClientError as e:
+        st.text('There is at least one file missing, please regenerate report and try again.')
 
 
 def check_file_exists(bucket_name, file_name):
@@ -129,6 +141,29 @@ def check_file_exists(bucket_name, file_name):
         return False
 
 
+def write_json_to_s3(bucket, filename, data, prefix):
+    s3 = boto3.client('s3')
+    # Convert your data to a JSON string
+    json_data = json.dumps(data)
+    # Convert your JSON string to bytes
+    json_bytes = json_data.encode()
+    # Write the JSON data to an S3 object
+    s3.put_object(Body=json_bytes, Bucket=bucket, Key=f"{prefix}/{filename}")
+
+
+def read_json_from_s3(bucket_name, filename, prefix):
+    s3 = boto3.client('s3')
+    # Get the object from S3
+    s3_object = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+    # Get the body of the object (the data content)
+    s3_object_body = s3_object['Body'].read()
+    # Convert bytes to string
+    string_data = s3_object_body.decode('utf-8')
+    # Convert string data to dictionary
+    dict_data = json.loads(string_data)
+    return dict_data
+
+
 # Inputs
 if view_report and build:
 
@@ -138,11 +173,7 @@ if view_report and build:
     prefix = build
 
     expected_plots = [f"{prefix}/{filename}" for filename in
-                      ['dr_norm.json', 'dr_raw.json', 'pass_by_plate.json', 'pass_by_pool.json',
-                       'qc_out.csv', 'mfi_out.csv', 'control_df.csv', 'pass_fail_table.csv',
-                       'dmso_perf.png', 'plate_dist_raw.png', 'plate_dist_norm.png', 'logMFI_heatmaps.png',
-                       'logMFI_norm_heatmaps.png', 'liverplot.json', 'banana_norm.json', 'banana_raw.json',
-                       'dr_er.json']]
+                      ['metadata.json']]
 
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
@@ -156,26 +187,109 @@ if view_report and build:
     if set(expected_plots).issubset(set(existing_plots)):
         print(f"All of the necessary plots already exist, generating output.")
 
+        # Get list of cultures
+        metadata = read_json_from_s3(bucket_name=bucket,
+                                     filename='metadata.json',
+                                     prefix=build)
+        cultures = metadata['culture']
+        plates = metadata['plates']
+
+        # Show report
         with st.spinner('Loading report...'):
             st.title('PRISM QC report')
-            st.header(build)
+            st.title(build)
+
+            # Show summary heatmaps
+            st.header('Build heatmaps')
+            st.subheader('logMFI')
+            st.markdown(descriptions.build_heatmap_ctl_mfi)
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"{label}_pert_type_heatmap.png"
+                    load_image_from_s3(filename=filename, prefix=build)
+
+            st.subheader('logMFI by plate')
+            st.markdown(descriptions.plate_heatmap_ctl_mfi)
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    selected_plates = [plate for plate in plates if label in plate and 'BASE' not in plate]
+                    for plate in selected_plates:
+                        filename = f"{plate}_{label}_pert_type_heatmap.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+
+            st.subheader('Bead count')
+            st.markdown(descriptions.build_heatmap_count)
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"{label}_count_heatmap.png"
+                    load_image_from_s3(filename=filename, prefix=build)
+
+            # Show plate heatmaps
+            st.header('Plate heatmaps')
+            st.subheader('logMFI')
+            st.markdown(descriptions.plate_heatmap_mfi)
+            raw, norm = st.tabs(['Raw', 'Normalized'])
+            with raw:
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"logMFI_{label}_heatmaps.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+            with norm:
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"logMFI_norm_{label}_heatmaps.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+
+            st.subheader('Count')
+            st.markdown(descriptions.plate_heatmap_count)
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"count_{label}_heatmaps.png"
+                    load_image_from_s3(filename=filename, prefix=build)
+
+            # control barcode quantiles
+            st.header('Control barcode performance')
+            st.markdown(descriptions.ctl_quantiles)
+            tab_labels = cultures
+            tabs = st.tabs(tab_labels)
+            for label, tab in zip(tab_labels, tabs):
+                with tab:
+                    filename = f"{label}_cb_quantiles.png"
+                    load_image_from_s3(filename=filename, prefix=build)
 
             # Plot pass rates
             st.header('Pass rates')
+            st.markdown(descriptions.dr_and_er)
             by_plate, by_pool = st.tabs(['By plate', 'By pool'])
             with by_plate:
+                st.markdown(descriptions.pass_by_plate)
                 load_plot_from_s3(filename='pass_by_plate.json', prefix=build)
             with by_pool:
+                st.markdown(descriptions.pass_by_pool)
                 load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
 
             # Show pass/fail table
-            st.header('Pass/fail table')
+            st.subheader('Pass/fail table')
+            st.markdown(descriptions.pass_table)
             pass_fail = load_df_from_s3('pass_fail_table.csv', prefix=build)
             st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
                 subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
 
             # Plot dynamic range
             st.header('Dynamic range')
+            st.markdown(descriptions.dr_ecdf)
             dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
             with dr_norm:
                 load_plot_from_s3(filename='dr_norm.json', prefix=build)
@@ -184,10 +298,12 @@ if view_report and build:
 
             # Liver plots
             st.header('Liver plots')
+            st.markdown(descriptions.liver_plots)
             load_plot_from_s3(filename='liverplot.json', prefix=build)
 
             # Banana plots
             st.header('Banana plots')
+            st.markdown(descriptions.banana_plots)
             banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
             with banana_normalized:
                 load_plot_from_s3('banana_norm.json', prefix=build)
@@ -196,45 +312,52 @@ if view_report and build:
 
             # Plot plate distributions
             st.header('Plate distributions')
-            norm, raw = st.tabs(['Normalized', 'Raw'])
-            with norm:
-                load_image_from_s3('plate_dist_norm.png', prefix=build)
+            st.markdown(descriptions.plate_dists)
+            raw, norm = st.tabs(['Raw', 'Normalized'])
             with raw:
-                load_image_from_s3('plate_dist_raw.png', prefix=build)
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_plate_dist_raw.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+            with norm:
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_plate_dist_norm.png"
+                        load_image_from_s3(filename=filename, prefix=build)
 
             # Dynamic range versus error rate
             st.header('Error rate and dynamic range')
+            st.markdown(descriptions.dr_vs_er)
             load_plot_from_s3('dr_er.json', prefix=build)
 
             # Plot DMSO performance
-            st.header('DMSO performance')
-            load_image_from_s3(filename='dmso_perf.png', prefix=build)
-
-            # Plot heatmaps
-            st.header('logMFI')
-            raw, norm = st.tabs(['Raw', 'Normalized'])
-            with raw:
-                load_image_from_s3(filename='logMFI_heatmaps.png', prefix=build)
-            with norm:
-                load_image_from_s3(filename='logMFI_norm_heatmaps.png', prefix=build)
+            #st.header('DMSO performance')
+            #load_image_from_s3(filename='dmso_perf.png', prefix=build)
 
             # Plot correlations
-
             if check_file_exists(file_name=f"{build}/corrplot_raw.png", bucket_name='cup.clue.io'):
                 st.header('Correlations')
-                raw, norm = st.tabs(['Raw', 'Normalized'])
+                st.markdown(descriptions.corr)
+                norm, raw = st.tabs(['Normalized', 'Raw'])
                 with raw:
                     load_image_from_s3(filename='corrplot_raw.png', prefix=build)
                 with norm:
                     load_image_from_s3(filename='corrplot_norm.png', prefix=build)
 
             # Compare historical performance
-            st.header('Historical performance')
-            raw, norm = st.tabs(['Raw', 'Normalized'])
-            with raw:
-                load_plot_from_s3('historical_mfi_raw.json', prefix='historical')
-            with norm:
-                load_plot_from_s3('historical_mfi_norm.json', prefix='historical')
+            # st.header('Historical performance')
+            # raw, norm = st.tabs(['Raw', 'Normalized'])
+            # with raw:
+            #    load_plot_from_s3('historical_mfi_raw.json', prefix='historical')
+            # with norm:
+            #    load_plot_from_s3('historical_mfi_norm.json', prefix='historical')
+    else:
+        st.text('Some content is missing from this report, try generating it again.\
+        \nIf this problem persists after regeneration, bother John!')
 
 elif generate_report and build:
     s3 = boto3.client('s3')
@@ -254,98 +377,106 @@ elif generate_report and build:
 
         with st.spinner('Generating report and uploading results'):
 
-            # Read data
-            mfi_cols = ['prism_replicate', 'pool_id', 'ccle_name', 'culture', 'pert_type', 'pert_well', 'replicate',
-                        'logMFI_norm', 'logMFI', 'pert_plate', 'pert_iname', 'pert_dose']
-            qc_cols = ['prism_replicate', 'ccle_name', 'pool_id', 'culture', 'pert_plate', 'ctl_vehicle_md',
-                       'trt_poscon_md', 'ctl_vehicle_mad', 'trt_poscon_mad', 'ssmd', 'nnmd', 'error_rate', 'dr',
-                       'pass']
+            # Read build and create metric dfs
+            df_build = read_build.read_build_from_s3(build)
+            qc = df_build.qc
+            mfi = df_build.mfi
+            lfc = df_build.lfc
+            count = df_build.count
+            inst = df_build.inst
 
-            print(f"Reading in {qc_file}.....")
-            qc = pd.read_csv(qc_file, usecols=qc_cols)
-            print(f"Reading in {mfi_file}.....")
-            mfi = pd.read_csv(mfi_file, usecols=mfi_cols)
-            print(f"Reading in {lfc_file}.....")
-            lfc = pd.read_csv(lfc_file)
+            # Fix count df
+            cnt = df_transform.construct_count_df(count, mfi)
+
+            # Save list of cultures to metadata json
+            cultures = list(mfi.culture.unique())
+            plates = list(mfi.prism_replicate.unique())
+            json_data = {'culture': cultures,
+                         'plates': plates}
+
+            filename = 'metadata.json'
+            write_json_to_s3(data=json_data,
+                             bucket=bucket,
+                             prefix=build,
+                             filename='metadata.json')
 
             # Add MFI to historical df if needed
-            print(f"Determining if necessary to add {build} to historical MFI data.....")
-            current_mfi = mfi[['pert_type', 'logMFI', 'logMFI_norm']].dropna()
-            current_mfi = current_mfi[current_mfi.pert_type.isin(['trt_poscon','ctl_vehicle'])]
-            current_mfi['build'] = build
+            # print(f"Determining if necessary to add {build} to historical MFI data.....")
+            # current_mfi = mfi[['pert_type', 'logMFI', 'logMFI_norm']].dropna()
+            # current_mfi = current_mfi[current_mfi.pert_type.isin(['trt_poscon', 'ctl_vehicle'])]
+            # current_mfi['build'] = build
 
-            if check_file_exists(bucket_name='cup.clue.io',
-                                 file_name='historical/historical_mfi.csv'):
-                response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_mfi.csv')
-                csv_bytes = response['Body'].read()
-                csv_buffer = io.StringIO(csv_bytes.decode())
-                hist_mfi = pd.read_csv(csv_buffer)
+            # if check_file_exists(bucket_name='cup.clue.io',
+            #                     file_name='historical/historical_mfi.csv'):
+            #    response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_mfi.csv')
+            #    csv_bytes = response['Body'].read()
+            #    csv_buffer = io.StringIO(csv_bytes.decode())
+            #    hist_mfi = pd.read_csv(csv_buffer)
 
-                hist_builds = list(hist_mfi['build'].unique())
+            #    hist_builds = list(hist_mfi['build'].unique())
 
-                if build not in hist_builds:
-                    print(f"Build {build} is being added to historical MFI data")
-                    df_mfi = pd.concat([current_mfi, hist_mfi])
-                    upload_df_to_s3(df_mfi,
-                                    prefix='historical',
-                                    filename='historical_mfi.csv')
-                else:
-                    print(f"Build {build} already exists in historical MFI data, skipping upload")
-            else:
-                print(f"No historical data found, creating historical MFI csv with {build} data")
-                upload_df_to_s3(current_mfi, filename='historical_mfi.csv', prefix='historical')
+            #    if build not in hist_builds:
+            #        print(f"Build {build} is being added to historical MFI data")
+            #        df_mfi = pd.concat([current_mfi, hist_mfi])
+            #        upload_df_to_s3(df_mfi,
+            #                        prefix='historical',
+            #                        filename='historical_mfi.csv')
+            #    else:
+            #        print(f"Build {build} already exists in historical MFI data, skipping upload")
+            # else:
+            #    print(f"No historical data found, creating historical MFI csv with {build} data")
+            #    upload_df_to_s3(current_mfi, filename='historical_mfi.csv', prefix='historical')
 
             # Download historical data
-            hist_mfi = load_df_from_s3(filename='historical_mfi.csv', prefix='historical')
-            print(f"Historical MFI data downloaded.....")
+            # hist_mfi = load_df_from_s3(filename='historical_mfi.csv', prefix='historical')
+            # print(f"Historical MFI data downloaded.....")
 
             # Add LFC to historical df if needed
-            print(f"Determining if necessary to add {build} to historical LFC data.....")
-            controls = ['Nutlin-3a','Nutlin-3','imatinib','Imatinib','AZ-628','bortezomib','DMSO', 'bortezomib']
-            current_lfc = lfc[['LFC','ccle_name','pert_dose','pert_iname','culture']].dropna()
-            current_lfc = current_lfc.query('pert_iname in @controls')
-            current_lfc['build'] = build
+            # print(f"Determining if necessary to add {build} to historical LFC data.....")
+            # controls = ['Nutlin-3a', 'Nutlin-3', 'imatinib', 'Imatinib', 'AZ-628', 'bortezomib', 'DMSO', 'bortezomib']
+            # current_lfc = lfc[['LFC', 'ccle_name', 'pert_dose', 'pert_iname', 'culture']].dropna()
+            # current_lfc = current_lfc.query('pert_iname in @controls')
+            # current_lfc['build'] = build
 
-            if check_file_exists(bucket_name='cup.clue.io',
-                                 file_name='historical/historical_lfc.csv'):
-                response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_lfc.csv')
-                csv_bytes = response['Body'].read()
-                csv_buffer = io.StringIO(csv_bytes.decode())
-                hist_lfc = pd.read_csv(csv_buffer)
-                hist_builds = list(hist_lfc['build'].unique())
+            # if check_file_exists(bucket_name='cup.clue.io',
+            #                     file_name='historical/historical_lfc.csv'):
+            #    response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_lfc.csv')
+            #    csv_bytes = response['Body'].read()
+            #    csv_buffer = io.StringIO(csv_bytes.decode())
+            #    hist_lfc = pd.read_csv(csv_buffer)
+            #    hist_builds = list(hist_lfc['build'].unique())
 
-                if build not in hist_builds:
-                    print(f"Build {build} is being added to historical LFC data")
-                    df_lfc = pd.concat([current_lfc, hist_lfc])
-                    upload_df_to_s3(df_lfc,
-                                    prefix='historical',
-                                    filename='historical_lfc.csv')
-                else:
-                    print(f"Build {build} already exists in historical LFC data, skipping upload.")
-            else:
-                print(f"No historical data found, creating historical LFC csv with {build} data")
-                upload_df_to_s3(current_lfc, filename='historical_lfc.csv', prefix='historical')
+            #    if build not in hist_builds:
+            #        print(f"Build {build} is being added to historical LFC data")
+            #        df_lfc = pd.concat([current_lfc, hist_lfc])
+            #        upload_df_to_s3(df_lfc,
+            #                        prefix='historical',
+            #                        filename='historical_lfc.csv')
+            #    else:
+            #        print(f"Build {build} already exists in historical LFC data, skipping upload.")
+            # else:
+            #    print(f"No historical data found, creating historical LFC csv with {build} data")
+            #    upload_df_to_s3(current_lfc, filename='historical_lfc.csv', prefix='historical')
 
             # Download historical data
-            print(f"Downloading historical LFC data...")
-            hist_lfc = load_df_from_s3(filename='historical_lfc.csv', prefix='historical')
-
+            # print(f"Downloading historical LFC data...")
+            # hist_lfc = load_df_from_s3(filename='historical_lfc.csv', prefix='historical')
 
             # Make the plot comparing historical performance
-            plotting_functions.plot_historical_mfi(df=hist_mfi,
-                                                    metric='logMFI',
-                                                    filename='historical_mfi_raw.json')
+            # plotting_functions.plot_historical_mfi(df=hist_mfi,
+            #                                       metric='logMFI',
+            #                                       filename='historical_mfi_raw.json')
 
-            plotting_functions.plot_historical_mfi(df=hist_mfi,
-                                                    metric='logMFI_norm',
-                                                    filename='historical_mfi_norm.json')
+            # plotting_functions.plot_historical_mfi(df=hist_mfi,
+            #                                       metric='logMFI_norm',
+            #                                       filename='historical_mfi_norm.json')
 
             # Transform mfi dataframe and upload to s3
             mfi_out = mfi.pipe(df_transform.add_bc_type)
-            print(f"Uploading {build}/mfi_out.csv to s3.....")
-            upload_df_to_s3(df=mfi_out,
-                            prefix=build,
-                            filename='mfi_out.csv')
+            # print(f"Uploading {build}/mfi_out.csv to s3.....")
+            # upload_df_to_s3(df=mfi_out,
+            #                prefix=build,
+            #                filename='mfi_out.csv')
 
             # Transform qc dataframe and upload to s3
             qc_out = qc.pipe(df_transform.add_pass_rates) \
@@ -383,6 +514,26 @@ elif generate_report and build:
                                                                                        'pert_plate']).dropna().reset_index()
 
             # Generate and save plots
+            print("Generating control barcode quantile plots....")
+            for culture in cultures:
+                plotting_functions.generate_cbc_quantile_plot(df=mfi,
+                                                              build=build,
+                                                              culture=culture)
+
+            print(f"Generating mfi heatmaps by plate/pool.....")
+            for culture in cultures:
+                plotting_functions.make_pert_type_heatmaps_by_plate(df=mfi,
+                                                                    build=build,
+                                                                    culture=culture)
+
+            print(f"Generating MFI heatmaps.....")
+            plotting_functions.make_pert_type_heatmaps(df=mfi,
+                                                       build=build)
+
+            print(f"Generating COUNT heatmaps.....")
+            plotting_functions.make_full_count_heatmaps(df=cnt,
+                                                        build=build)
+
             print(f"Generating pass rate plots.....")
             plotting_functions.plot_pass_rates_by_plate(df=qc_out,
                                                         build=build,
@@ -407,27 +558,46 @@ elif generate_report and build:
                                                      filename='dmso_perf.png')
 
             print(f"Generating plate distribution plots.....")
-            plotting_functions.plot_distributions_by_plate(mfi_out,
-                                                           value='logMFI_norm',
-                                                           build=build,
-                                                           filename='plate_dist_norm.png')
-            plotting_functions.plot_distributions_by_plate(mfi_out,
-                                                           value='logMFI',
-                                                           build=build,
-                                                           filename='plate_dist_raw.png')
-            print(f"Generating heatmaps.....")
-            plotting_functions.plot_heatmaps(mfi_out,
-                                             metric='logMFI',
-                                             build=build)
-            plotting_functions.plot_heatmaps(mfi_out,
-                                             metric='logMFI_norm',
-                                             build=build)
+            for culture in cultures:
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI_norm',
+                                                               build=build,
+                                                               filename='plate_dist_norm.png',
+                                                               culture=culture)
+                plotting_functions.plot_distributions_by_plate(mfi_out,
+                                                               value='logMFI',
+                                                               build=build,
+                                                               filename='plate_dist_raw.png',
+                                                               culture=culture)
+
+            print(f"Generating plate heatmaps.....")
+            for culture in cultures:
+                plotting_functions.plot_plate_heatmaps(mfi_out,
+                                                       metric='logMFI',
+                                                       build=build,
+                                                       culture=culture)
+                plotting_functions.plot_plate_heatmaps(mfi_out,
+                                                       metric='logMFI_norm',
+                                                       build=build,
+                                                       culture=culture)
+                plotting_functions.plot_plate_heatmaps(cnt,
+                                                       metric='count',
+                                                       by_type=False,
+                                                       build=build,
+                                                       culture=culture)
+                plotting_functions.plot_plate_heatmaps(cnt,
+                                                       metric='count',
+                                                       by_type=False,
+                                                       build=build,
+                                                       culture=culture)
 
             print(f"Generating liver plots.....")
-            plotting_functions.plot_liver_plots(qc_out,
-                                                build=build,
-                                                filename='liverplot.json')
-
+            try:
+                plotting_functions.plot_liver_plots(qc_out,
+                                                    build=build,
+                                                    filename='liverplot.json')
+            except:
+                print("Could not generate liver plots.")
             print(f"Generating banana plots.....")
             plotting_functions.plot_banana_plots(control_df,
                                                  build=build,
@@ -442,9 +612,12 @@ elif generate_report and build:
                                                  filename='banana_raw.json')
 
             print(f"Generating error rate plot.....")
-            plotting_functions.plot_dr_error_rate(qc_out,
-                                                  build=build,
-                                                  filename='dr_er.json')
+            try:
+                plotting_functions.plot_dr_error_rate(qc_out,
+                                                      build=build,
+                                                      filename='dr_er.json')
+            except:
+                print(f"Error generating error rate plot.")
 
             print(f"There are multiple replicates, generating correlation plots.....")
             if len(mfi.replicate.unique()) > 1:
@@ -453,12 +626,14 @@ elif generate_report and build:
                                                  build=build,
                                                  filename='corrplot_norm.png')
                 plotting_functions.plot_corrplot(df=corr_df_raw,
-                                             mfi=mfi,
-                                             build=build,
-                                             filename='corrplot_raw.png')
+                                                 mfi=mfi,
+                                                 build=build,
+                                                 filename='corrplot_raw.png')
 
             print(f"Generating pass/fail table.....")
             df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
+
+            print(f"Report generation is complete!")
 
     else:
         st.text('Build does not exist; check S3.')

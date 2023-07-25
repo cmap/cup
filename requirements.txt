@@ -8,5 +8,6 @@ pillow~=9.2.0
 requests~=2.28.1
 numpy~=1.23.4
 seaborn~=0.12.1
+botocore~=1.27.59
 altair==4
 cmappy
