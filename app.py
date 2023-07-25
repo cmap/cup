@@ -216,7 +216,7 @@ if view_report and build:
             tabs = st.tabs(tab_labels)
             for label, tab in zip(tab_labels, tabs):
                 with tab:
-                    selected_plates = [plate for plate in plates if label in plate]
+                    selected_plates = [plate for plate in plates if label in plate and 'BASE' not in plate]
                     for plate in selected_plates:
                         filename = f"{plate}_{label}_pert_type_heatmap.png"
                         load_image_from_s3(filename=filename, prefix=build)
