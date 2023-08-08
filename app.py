@@ -266,7 +266,7 @@ if view_report and build:
                         load_image_from_s3(filename=filename, prefix=build)
 
             st.subheader('Bead count')
-            st.dataframe(scanner_table.drop(columns=['det_plate']))
+            st.dataframe(scanner_table.drop(columns=['det_plate']), hide_index=True)
             st.markdown(descriptions.build_heatmap_count)
             tab_labels = cultures
             tabs = st.tabs(tab_labels)
