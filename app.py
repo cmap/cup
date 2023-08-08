@@ -456,6 +456,11 @@ elif generate_report and build:
                              prefix=build,
                              filename='plate_metadata.json')
 
+            # add count meta to count df
+            cnt = cnt.merge(plate_meta, on=['prism_replicate'], how='left')
+            cnt['plate'] = cnt['prism_replicate'] + "[" + cnt['scanner_id'].astype('str') + "]"
+            print(cnt)
+
             # Transform mfi and qc tables
             mfi_out = mfi.pipe(df_transform.add_bc_type)
             qc_out = qc.pipe(df_transform.add_pass_rates) \

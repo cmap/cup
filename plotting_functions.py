@@ -505,11 +505,11 @@ def make_pert_type_heatmaps(df, build, metric='logMFI'):
 def make_full_count_heatmaps(df, build, metric='count'):
     for culture in df.culture.unique():
         # Filter and sort dataframe
-        data = df[(df.culture == culture)&(~df.prism_replicate.str.contains('BASE'))].sort_values(['prism_replicate', 'pert_well'])
+        data = df[(df.culture == culture)&(~df.plate.str.contains('BASE'))].sort_values(['plate', 'pert_well'])
         # Create pivot table
         pivot_table = data.pivot_table(
             values=metric,
-            index=['prism_replicate'],
+            index=['plate'],
             columns=['pert_well'],
             aggfunc='median')
 
