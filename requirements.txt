@@ -11,3 +11,4 @@ seaborn~=0.12.1
 botocore~=1.27.59
 altair==4
 cmappy
+pymysql
