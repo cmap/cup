@@ -234,9 +234,10 @@ if view_report and build:
                                            filename='plate_metadata.json',
                                            prefix=build)
         scanner_table = pd.DataFrame(json.loads(plate_metadata))
-        scanner_table['scanner_id'] = scanner_table['scanner_id'].astype('Int64')
-        scanner_table['median_count'] = scanner_table['median_count'].astype('Int64')
-        scanner_table['iqr_count'] = scanner_table['iqr_count'].astype('Int64')
+        if 'scanner_id' in scanner_table.columns:
+            scanner_table['scanner_id'] = scanner_table['scanner_id'].astype('Int64')
+            scanner_table['median_count'] = scanner_table['median_count'].astype('Int64')
+            scanner_table['iqr_count'] = scanner_table['iqr_count'].astype('Int64')
 
         # Show report
         with st.spinner('Loading report...'):
@@ -287,7 +288,8 @@ if view_report and build:
 
             with st.expander('Bead count'):
                 st.header('Bead Count')
-                st.dataframe(scanner_table.drop(columns=['det_plate']))
+                if 'det_plate' in scanner_table:
+                    st.dataframe(scanner_table.drop(columns=['det_plate']))
                 st.subheader('Build count')
                 st.markdown(descriptions.build_heatmap_count)
                 tab_labels = cultures
@@ -449,7 +451,8 @@ elif generate_report and build:
             }
             cnt_meta = cnt.groupby('prism_replicate').agg(agg_funcs).reset_index()
             cnt_meta.columns = ['prism_replicate', 'median_count', 'stdev_count', 'var_count', 'iqr_count']
-            plate_meta = plate_meta.merge(cnt_meta, left_on='det_plate', right_on='prism_replicate', how='right')
+            if 'det_plate' in plate_meta.columns:
+                plate_meta = plate_meta.merge(cnt_meta, left_on='det_plate', right_on='prism_replicate', how='right')
             json_data = plate_meta.to_json()
             write_json_to_s3(data=json_data,
                              bucket=bucket,
@@ -457,9 +460,11 @@ elif generate_report and build:
                              filename='plate_metadata.json')
 
             # add count meta to count df
-            cnt = cnt.merge(plate_meta, on=['prism_replicate'], how='left')
-            cnt['plate'] = cnt['prism_replicate'] + "[" + cnt['scanner_id'].astype('str') + "]"
-            print(cnt)
+            if 'det_plate' in plate_meta.columns:
+                cnt = cnt.merge(plate_meta, on=['prism_replicate'], how='left')
+                cnt['plate'] = cnt['prism_replicate'] + "[" + cnt['scanner_id'].astype('str') + "]"
+            else:
+                cnt['plate'] = cnt['prism_replicate']
 
             # Transform mfi and qc tables
             mfi_out = mfi.pipe(df_transform.add_bc_type)
