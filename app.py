@@ -244,150 +244,156 @@ if view_report and build:
             st.title(build)
 
             # Show summary heatmaps
-            st.header('Build heatmaps')
-            st.subheader('logMFI')
-            st.markdown(descriptions.build_heatmap_ctl_mfi)
-            tab_labels = cultures
-            tabs = st.tabs(tab_labels)
-            for label, tab in zip(tab_labels, tabs):
-                with tab:
-                    filename = f"{label}_pert_type_heatmap.png"
-                    load_image_from_s3(filename=filename, prefix=build)
-
-            st.subheader('logMFI by plate')
-            st.markdown(descriptions.plate_heatmap_ctl_mfi)
-            tab_labels = cultures
-            tabs = st.tabs(tab_labels)
-            for label, tab in zip(tab_labels, tabs):
-                with tab:
-                    selected_plates = [plate for plate in plates if label in plate and 'BASE' not in plate]
-                    for plate in selected_plates:
-                        filename = f"{plate}_{label}_pert_type_heatmap.png"
-                        load_image_from_s3(filename=filename, prefix=build)
-
-            st.subheader('Bead count')
-            st.dataframe(scanner_table.drop(columns=['det_plate']))
-            st.markdown(descriptions.build_heatmap_count)
-            tab_labels = cultures
-            tabs = st.tabs(tab_labels)
-            for label, tab in zip(tab_labels, tabs):
-                with tab:
-                    filename = f"{label}_count_heatmap.png"
-                    load_image_from_s3(filename=filename, prefix=build)
-
-            # Show plate heatmaps
-            st.header('Plate heatmaps')
-            st.subheader('logMFI')
-            st.markdown(descriptions.plate_heatmap_mfi)
-            raw, norm = st.tabs(['Raw', 'Normalized'])
-            with raw:
+            with st.expander('logMFI'):
+                st.header('LogMFI')
+                st.subheader('Build')
+                st.markdown(descriptions.build_heatmap_ctl_mfi)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
                 for label, tab in zip(tab_labels, tabs):
                     with tab:
-                        filename = f"logMFI_{label}_heatmaps.png"
+                        filename = f"{label}_pert_type_heatmap.png"
                         load_image_from_s3(filename=filename, prefix=build)
-            with norm:
+
+                st.subheader('Controls')
+                st.markdown(descriptions.plate_heatmap_ctl_mfi)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
                 for label, tab in zip(tab_labels, tabs):
                     with tab:
-                        filename = f"logMFI_norm_{label}_heatmaps.png"
-                        load_image_from_s3(filename=filename, prefix=build)
+                        selected_plates = [plate for plate in plates if label in plate and 'BASE' not in plate]
+                        for plate in selected_plates:
+                            filename = f"{plate}_{label}_pert_type_heatmap.png"
+                            load_image_from_s3(filename=filename, prefix=build)
 
-            st.subheader('Count')
-            st.markdown(descriptions.plate_heatmap_count)
-            tab_labels = cultures
-            tabs = st.tabs(tab_labels)
-            for label, tab in zip(tab_labels, tabs):
-                with tab:
-                    filename = f"count_{label}_heatmaps.png"
-                    load_image_from_s3(filename=filename, prefix=build)
+                # Show plate heatmaps
+                st.subheader('Plate')
+                st.markdown(descriptions.plate_heatmap_mfi)
+                raw, norm = st.tabs(['Raw', 'Normalized'])
+                with raw:
+                    tab_labels = cultures
+                    tabs = st.tabs(tab_labels)
+                    for label, tab in zip(tab_labels, tabs):
+                        with tab:
+                            filename = f"logMFI_{label}_heatmaps.png"
+                            load_image_from_s3(filename=filename, prefix=build)
+                with norm:
+                    tab_labels = cultures
+                    tabs = st.tabs(tab_labels)
+                    for label, tab in zip(tab_labels, tabs):
+                        with tab:
+                            filename = f"logMFI_norm_{label}_heatmaps.png"
+                            load_image_from_s3(filename=filename, prefix=build)
 
-            # control barcode quantiles
-            st.header('Control barcode performance')
-            st.markdown(descriptions.ctl_quantiles)
-            tab_labels = cultures
-            tabs = st.tabs(tab_labels)
-            for label, tab in zip(tab_labels, tabs):
-                with tab:
-                    filename = f"{label}_cb_quantiles.png"
-                    load_image_from_s3(filename=filename, prefix=build)
-
-            # Plot pass rates
-            st.header('Pass rates')
-            st.markdown(descriptions.dr_and_er)
-            by_plate, by_pool = st.tabs(['By plate', 'By pool'])
-            with by_plate:
-                st.markdown(descriptions.pass_by_plate)
-                load_plot_from_s3(filename='pass_by_plate.json', prefix=build)
-            with by_pool:
-                st.markdown(descriptions.pass_by_pool)
-                load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
-
-            # Show pass/fail table
-            st.subheader('Pass/fail table')
-            st.markdown(descriptions.pass_table)
-            pass_fail = load_df_from_s3('pass_fail_table.csv', prefix=build)
-            st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
-                subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
-
-            # Plot dynamic range
-            st.header('Dynamic range')
-            st.markdown(descriptions.dr_ecdf)
-            dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
-            with dr_norm:
-                load_plot_from_s3(filename='dr_norm.json', prefix=build)
-            with dr_raw:
-                load_plot_from_s3(filename='dr_raw.json', prefix=build)
-
-            # Liver plots
-            st.header('Liver plots')
-            st.markdown(descriptions.liver_plots)
-            load_plot_from_s3(filename='liverplot.json', prefix=build)
-
-            # Banana plots
-            st.header('Banana plots')
-            st.markdown(descriptions.banana_plots)
-            banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
-            with banana_normalized:
-                load_plot_from_s3('banana_norm.json', prefix=build)
-            with banana_raw:
-                load_plot_from_s3('banana_raw.json', prefix=build)
-
-            # Plot plate distributions
-            st.header('Plate distributions')
-            st.markdown(descriptions.plate_dists)
-            raw, norm = st.tabs(['Raw', 'Normalized'])
-            with raw:
+            with st.expander('Bead count'):
+                st.header('Bead Count')
+                st.dataframe(scanner_table.drop(columns=['det_plate']))
+                st.subheader('Build count')
+                st.markdown(descriptions.build_heatmap_count)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
                 for label, tab in zip(tab_labels, tabs):
                     with tab:
-                        filename = f"{label}_plate_dist_raw.png"
+                        filename = f"{label}_count_heatmap.png"
                         load_image_from_s3(filename=filename, prefix=build)
-            with norm:
+
+                st.subheader('Plate count')
+                st.markdown(descriptions.plate_heatmap_count)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
                 for label, tab in zip(tab_labels, tabs):
                     with tab:
-                        filename = f"{label}_plate_dist_norm.png"
+                        filename = f"count_{label}_heatmaps.png"
                         load_image_from_s3(filename=filename, prefix=build)
 
-            # Dynamic range versus error rate
-            st.header('Error rate and dynamic range')
-            st.markdown(descriptions.dr_vs_er)
-            load_plot_from_s3('dr_er.json', prefix=build)
+            with st.expander('Control barcodes'):
+                # control barcode quantiles
+                st.header('Control barcode performance')
+                st.markdown(descriptions.ctl_quantiles)
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_cb_quantiles.png"
+                        load_image_from_s3(filename=filename, prefix=build)
 
+            with st.expander('Cell line pass/fail'):
+                # Plot pass rates
+                st.header('Pass rates')
+                st.markdown(descriptions.dr_and_er)
+                by_plate, by_pool = st.tabs(['By plate', 'By pool'])
+                with by_plate:
+                    st.markdown(descriptions.pass_by_plate)
+                    load_plot_from_s3(filename='pass_by_plate.json', prefix=build)
+                with by_pool:
+                    st.markdown(descriptions.pass_by_pool)
+                    load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
+
+                # Show pass/fail table
+                st.subheader('Pass/fail table')
+                st.markdown(descriptions.pass_table)
+                pass_fail = load_df_from_s3('pass_fail_table.csv', prefix=build)
+                st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
+                    subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
+
+                # Plot dynamic range
+                st.header('Dynamic range')
+                st.markdown(descriptions.dr_ecdf)
+                dr_norm, dr_raw = st.tabs(['Normalized', 'Raw'])
+                with dr_norm:
+                    load_plot_from_s3(filename='dr_norm.json', prefix=build)
+                with dr_raw:
+                    load_plot_from_s3(filename='dr_raw.json', prefix=build)
+
+            with st.expander('Threshold plots'):
+                # Liver plots
+                st.header('Liver plots')
+                st.markdown(descriptions.liver_plots)
+                load_plot_from_s3(filename='liverplot.json', prefix=build)
+
+                # Banana plots
+                st.header('Banana plots')
+                st.markdown(descriptions.banana_plots)
+                banana_normalized, banana_raw = st.tabs(['Normalized', 'Raw'])
+                with banana_normalized:
+                    load_plot_from_s3('banana_norm.json', prefix=build)
+                with banana_raw:
+                    load_plot_from_s3('banana_raw.json', prefix=build)
+
+                # Dynamic range versus error rate
+                st.header('Error rate and dynamic range')
+                st.markdown(descriptions.dr_vs_er)
+                load_plot_from_s3('dr_er.json', prefix=build)
+
+            with st.expander('Distributions'):
+                # Plot plate distributions
+                st.header('Plate distributions')
+                st.markdown(descriptions.plate_dists)
+                raw, norm = st.tabs(['Raw', 'Normalized'])
+                with raw:
+                    tab_labels = cultures
+                    tabs = st.tabs(tab_labels)
+                    for label, tab in zip(tab_labels, tabs):
+                        with tab:
+                            filename = f"{label}_plate_dist_raw.png"
+                            load_image_from_s3(filename=filename, prefix=build)
+                with norm:
+                    tab_labels = cultures
+                    tabs = st.tabs(tab_labels)
+                    for label, tab in zip(tab_labels, tabs):
+                        with tab:
+                            filename = f"{label}_plate_dist_norm.png"
+                            load_image_from_s3(filename=filename, prefix=build)
             # Plot correlations
             if check_file_exists(file_name=f"{build}/corrplot_raw.png", bucket_name='cup.clue.io'):
-                st.header('Correlations')
-                st.markdown(descriptions.corr)
-                norm, raw = st.tabs(['Normalized', 'Raw'])
-                with raw:
-                    load_image_from_s3(filename='corrplot_raw.png', prefix=build)
-                with norm:
-                    load_image_from_s3(filename='corrplot_norm.png', prefix=build)
+                with st.expander('Correlations'):
+                    st.header('Correlations')
+                    st.markdown(descriptions.corr)
+                    norm, raw = st.tabs(['Normalized', 'Raw'])
+                    with raw:
+                        load_image_from_s3(filename='corrplot_raw.png', prefix=build)
+                    with norm:
+                        load_image_from_s3(filename='corrplot_norm.png', prefix=build)
 
     else:
         st.text('Some content is missing from this report, try generating it again.\
