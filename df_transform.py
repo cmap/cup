@@ -30,6 +30,10 @@ def add_replicate(df):
     return df
 
 
+def compute_mad(series):
+    return abs(series - series.mean()).mean()
+
+
 def pivot_dmso_bort(df):
     # raw data
     merge_cols = ['prism_replicate',
@@ -55,14 +59,21 @@ def pivot_dmso_bort(df):
     dmso_med = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).median().reset_index().rename(
         columns={'logMFI': 'ctl_vehicle_med'})
 
-    dmso_mad = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
+    dmso_mad = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).agg(
+        lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI': 'ctl_vehicle_mad'})
+    #dmso_mad = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
+    #    columns={'logMFI': 'ctl_vehicle_mad'})
 
     bort_med = data[data.pert_type == 'trt_poscon'].groupby(group_cols).median().reset_index().rename(
         columns={'logMFI': 'trt_poscon_med'})
 
-    bort_mad = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
+    bort_mad = data[data.pert_type == 'trt_poscon'].groupby(group_cols).agg(
+        lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI': 'trt_poscon_mad'})
+    #bort_mad = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
+    #    columns={'logMFI': 'trt_poscon_mad'})
+
     out = dmso_med.merge(dmso_mad, on=merge_cols).merge(bort_med, on=merge_cols).merge(bort_mad, on=merge_cols)
 
     # normalized data
@@ -79,14 +90,21 @@ def pivot_dmso_bort(df):
     dmso_med_norm = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).median().reset_index().rename(
         columns={'logMFI_norm': 'ctl_vehicle_med_norm'})
 
-    dmso_mad_norm = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
+    dmso_mad_norm = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).agg(
+        lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI_norm': 'ctl_vehicle_mad_norm'})
+    #dmso_mad_norm = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
+    #    columns={'logMFI_norm': 'ctl_vehicle_mad_norm'})
 
     bort_med_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).median().reset_index().rename(
         columns={'logMFI_norm': 'trt_poscon_med_norm'})
 
-    bort_mad_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
+    bort_mad_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).agg(
+        lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI_norm': 'trt_poscon_mad_norm'})
+    #bort_mad_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
+    #    columns={'logMFI_norm': 'trt_poscon_mad_norm'})
+
     out_norm = dmso_med_norm.merge(dmso_mad_norm, on=merge_cols).merge(bort_med_norm, on=merge_cols).merge(
         bort_mad_norm, on=merge_cols)
 

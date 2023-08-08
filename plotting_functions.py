@@ -362,7 +362,7 @@ def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
         heatmap_data = data_agg[(data_agg['pert_plate'] == plate) & (data_agg['replicate'] == replicate)]
 
         # Pivot the data for the heatmap
-        heatmap_data = heatmap_data.pivot('row', 'col', metric)
+        heatmap_data = heatmap_data.pivot(index='row', columns='col', values=metric)
 
         # Plot the heatmap
         if metric == 'count':
@@ -384,7 +384,7 @@ def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
             annotations_data = annots_agg[(annots_agg['pert_plate'] == plate) & (annots_agg['replicate'] == replicate)]
 
             # Pivot the data for the annotations
-            annotations_data = annotations_data.pivot('row', 'col', 'pert_type_annot').dropna()
+            annotations_data = annotations_data.pivot(index='row', columns='col', values='pert_type_annot').dropna()
 
             # Annotate the heatmap
             for text_row_idx, row in enumerate(annotations_data.index):

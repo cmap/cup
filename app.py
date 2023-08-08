@@ -1,5 +1,4 @@
 import logging
-import math
 import os
 from pathlib import Path
 import pandas as pd
@@ -16,6 +15,7 @@ from PIL import Image
 import botocore
 import json
 import read_build
+import pymysql
 
 logging.basicConfig(filename='./logs/ctg_logs.log')
 logging.debug('This message should go to the log file')
@@ -164,6 +164,41 @@ def read_json_from_s3(bucket_name, filename, prefix):
     return dict_data
 
 
+def fetch_data_from_db(det_plates):
+    # Database connection parameters
+    db_params = {
+        'host': 'lims.c2kct5xnoka4.us-east-1.rds.amazonaws.com',
+        'user': 'jdavis',  # Replace with your username
+        'password': 'DU;6tsb$;BFc>)',  # Replace with your password
+        'db': 'lims',
+        'charset': 'utf8mb4',
+        'cursorclass': pymysql.cursors.DictCursor
+    }
+
+    try:
+        # Connect to the database
+        connection = pymysql.connect(**db_params)
+        with connection.cursor() as cursor:
+            # Build the SQL query
+            format_strings = ','.join(['%s'] * len(det_plates))
+            sql = f"SELECT scanner_id, det_plate FROM plate WHERE det_plate IN ({format_strings})"
+
+            # Execute the query
+            cursor.execute(sql, tuple(det_plates))
+
+            # Fetch the results
+            results = cursor.fetchall()
+
+        return results
+
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return []
+
+    finally:
+        connection.close()
+
+
 # Inputs
 if view_report and build:
 
@@ -173,7 +208,7 @@ if view_report and build:
     prefix = build
 
     expected_plots = [f"{prefix}/{filename}" for filename in
-                      ['metadata.json']]
+                      ['build_metadata.json', 'plate_metadata.json']]
 
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
     if 'Contents' in response:
@@ -188,11 +223,20 @@ if view_report and build:
         print(f"All of the necessary plots already exist, generating output.")
 
         # Get list of cultures
-        metadata = read_json_from_s3(bucket_name=bucket,
-                                     filename='metadata.json',
+        build_metadata = read_json_from_s3(bucket_name=bucket,
+                                     filename='build_metadata.json',
                                      prefix=build)
-        cultures = metadata['culture']
-        plates = metadata['plates']
+        cultures = build_metadata['culture']
+        plates = build_metadata['plates']
+
+        # Get plate metadata
+        plate_metadata = read_json_from_s3(bucket_name=bucket,
+                                           filename='plate_metadata.json',
+                                           prefix=build)
+        scanner_table = pd.DataFrame(json.loads(plate_metadata))
+        scanner_table['scanner_id'] = scanner_table['scanner_id'].astype('Int64')
+        scanner_table['median_count'] = scanner_table['median_count'].astype('Int64')
+        scanner_table['iqr_count'] = scanner_table['iqr_count'].astype('Int64')
 
         # Show report
         with st.spinner('Loading report...'):
@@ -222,6 +266,7 @@ if view_report and build:
                         load_image_from_s3(filename=filename, prefix=build)
 
             st.subheader('Bead count')
+            st.dataframe(scanner_table.drop(columns=['det_plate']))
             st.markdown(descriptions.build_heatmap_count)
             tab_labels = cultures
             tabs = st.tabs(tab_labels)
@@ -334,10 +379,6 @@ if view_report and build:
             st.markdown(descriptions.dr_vs_er)
             load_plot_from_s3('dr_er.json', prefix=build)
 
-            # Plot DMSO performance
-            #st.header('DMSO performance')
-            #load_image_from_s3(filename='dmso_perf.png', prefix=build)
-
             # Plot correlations
             if check_file_exists(file_name=f"{build}/corrplot_raw.png", bucket_name='cup.clue.io'):
                 st.header('Correlations')
@@ -348,13 +389,6 @@ if view_report and build:
                 with norm:
                     load_image_from_s3(filename='corrplot_norm.png', prefix=build)
 
-            # Compare historical performance
-            # st.header('Historical performance')
-            # raw, norm = st.tabs(['Raw', 'Normalized'])
-            # with raw:
-            #    load_plot_from_s3('historical_mfi_raw.json', prefix='historical')
-            # with norm:
-            #    load_plot_from_s3('historical_mfi_norm.json', prefix='historical')
     else:
         st.text('Some content is missing from this report, try generating it again.\
         \nIf this problem persists after regeneration, bother John!')
@@ -385,7 +419,7 @@ elif generate_report and build:
             count = df_build.count
             inst = df_build.inst
 
-            # Fix count df
+            # Annotate count df
             cnt = df_transform.construct_count_df(count, mfi)
 
             # Save list of cultures to metadata json
@@ -394,98 +428,33 @@ elif generate_report and build:
             json_data = {'culture': cultures,
                          'plates': plates}
 
-            filename = 'metadata.json'
+            filename = 'build_metadata.json'
             write_json_to_s3(data=json_data,
                              bucket=bucket,
                              prefix=build,
-                             filename='metadata.json')
+                             filename=filename)
 
-            # Add MFI to historical df if needed
-            # print(f"Determining if necessary to add {build} to historical MFI data.....")
-            # current_mfi = mfi[['pert_type', 'logMFI', 'logMFI_norm']].dropna()
-            # current_mfi = current_mfi[current_mfi.pert_type.isin(['trt_poscon', 'ctl_vehicle'])]
-            # current_mfi['build'] = build
+            # Create plate metadata
+            det_plates = list(qc.prism_replicate.unique())
+            plate_meta = pd.DataFrame(fetch_data_from_db(det_plates))
+            # Group by 'prism_replicate' and calculate various statistics
+            agg_funcs = {
+                'count': ['median', 'std', 'var', lambda x: x.quantile(0.75) - x.quantile(0.25)]
+            }
+            cnt_meta = cnt.groupby('prism_replicate').agg(agg_funcs).reset_index()
+            cnt_meta.columns = ['prism_replicate', 'median_count', 'stdev_count', 'var_count', 'iqr_count']
+            plate_meta = plate_meta.merge(cnt_meta, left_on='det_plate', right_on='prism_replicate', how='right')
+            json_data = plate_meta.to_json()
+            write_json_to_s3(data=json_data,
+                             bucket=bucket,
+                             prefix=build,
+                             filename='plate_metadata.json')
 
-            # if check_file_exists(bucket_name='cup.clue.io',
-            #                     file_name='historical/historical_mfi.csv'):
-            #    response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_mfi.csv')
-            #    csv_bytes = response['Body'].read()
-            #    csv_buffer = io.StringIO(csv_bytes.decode())
-            #    hist_mfi = pd.read_csv(csv_buffer)
-
-            #    hist_builds = list(hist_mfi['build'].unique())
-
-            #    if build not in hist_builds:
-            #        print(f"Build {build} is being added to historical MFI data")
-            #        df_mfi = pd.concat([current_mfi, hist_mfi])
-            #        upload_df_to_s3(df_mfi,
-            #                        prefix='historical',
-            #                        filename='historical_mfi.csv')
-            #    else:
-            #        print(f"Build {build} already exists in historical MFI data, skipping upload")
-            # else:
-            #    print(f"No historical data found, creating historical MFI csv with {build} data")
-            #    upload_df_to_s3(current_mfi, filename='historical_mfi.csv', prefix='historical')
-
-            # Download historical data
-            # hist_mfi = load_df_from_s3(filename='historical_mfi.csv', prefix='historical')
-            # print(f"Historical MFI data downloaded.....")
-
-            # Add LFC to historical df if needed
-            # print(f"Determining if necessary to add {build} to historical LFC data.....")
-            # controls = ['Nutlin-3a', 'Nutlin-3', 'imatinib', 'Imatinib', 'AZ-628', 'bortezomib', 'DMSO', 'bortezomib']
-            # current_lfc = lfc[['LFC', 'ccle_name', 'pert_dose', 'pert_iname', 'culture']].dropna()
-            # current_lfc = current_lfc.query('pert_iname in @controls')
-            # current_lfc['build'] = build
-
-            # if check_file_exists(bucket_name='cup.clue.io',
-            #                     file_name='historical/historical_lfc.csv'):
-            #    response = s3.get_object(Bucket='cup.clue.io', Key='historical/historical_lfc.csv')
-            #    csv_bytes = response['Body'].read()
-            #    csv_buffer = io.StringIO(csv_bytes.decode())
-            #    hist_lfc = pd.read_csv(csv_buffer)
-            #    hist_builds = list(hist_lfc['build'].unique())
-
-            #    if build not in hist_builds:
-            #        print(f"Build {build} is being added to historical LFC data")
-            #        df_lfc = pd.concat([current_lfc, hist_lfc])
-            #        upload_df_to_s3(df_lfc,
-            #                        prefix='historical',
-            #                        filename='historical_lfc.csv')
-            #    else:
-            #        print(f"Build {build} already exists in historical LFC data, skipping upload.")
-            # else:
-            #    print(f"No historical data found, creating historical LFC csv with {build} data")
-            #    upload_df_to_s3(current_lfc, filename='historical_lfc.csv', prefix='historical')
-
-            # Download historical data
-            # print(f"Downloading historical LFC data...")
-            # hist_lfc = load_df_from_s3(filename='historical_lfc.csv', prefix='historical')
-
-            # Make the plot comparing historical performance
-            # plotting_functions.plot_historical_mfi(df=hist_mfi,
-            #                                       metric='logMFI',
-            #                                       filename='historical_mfi_raw.json')
-
-            # plotting_functions.plot_historical_mfi(df=hist_mfi,
-            #                                       metric='logMFI_norm',
-            #                                       filename='historical_mfi_norm.json')
-
-            # Transform mfi dataframe and upload to s3
+            # Transform mfi and qc tables
             mfi_out = mfi.pipe(df_transform.add_bc_type)
-            # print(f"Uploading {build}/mfi_out.csv to s3.....")
-            # upload_df_to_s3(df=mfi_out,
-            #                prefix=build,
-            #                filename='mfi_out.csv')
-
-            # Transform qc dataframe and upload to s3
             qc_out = qc.pipe(df_transform.add_pass_rates) \
                 .pipe(df_transform.add_replicate)
             qc_out = df_transform.append_raw_dr(mfi, qc_out)
-            print(f"Uploading {build}/qc_out.csv to s3.....")
-            upload_df_to_s3(df=qc_out,
-                            prefix=build,
-                            filename='qc_out.csv')
 
             # Pivot table for poscon/negcon comparison and upload to s3
             control_df = mfi_out.pipe(df_transform.pivot_dmso_bort)
@@ -495,12 +464,6 @@ elif generate_report and build:
                                               'pert_plate'],
                                           how='left')
             control_df['replicate'] = control_df['prism_replicate'].str.split('_').str[3]
-            print(f"Uploading {build}/control_df.csv to s3.....")
-            upload_df_to_s3(df=control_df,
-                            prefix=build,
-                            filename='control_df.csv')
-
-            # Generate replicate correlation df
 
             print(f"Generating replicate correlation dataframes.....")
             corr_df_norm = mfi[~mfi.pert_plate.str.contains('BASE')].pivot_table(columns=['replicate'],

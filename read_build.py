@@ -79,7 +79,7 @@ def read_build_from_s3(build_name, s3_bucket='macchiato.clue.io', prefix='builds
                 with gzip.GzipFile(fileobj=BytesIO(content.read())) as gz:
                     delimiter = '\t' if filename.endswith('.txt.gz') else ','
                     print(f"Reading {data_level} file {filename}")
-                    df = pd.read_csv(gz, sep=delimiter)
+                    df = pd.read_csv(gz, sep=delimiter, low_memory=False)
             elif filename.endswith('.gctx.gz'):
                 with gzip.open(content, 'rb') as gz_file:
                     binary_data = gz_file.read()
