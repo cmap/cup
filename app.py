@@ -79,6 +79,8 @@ build = st.selectbox(
 st.experimental_set_query_params(option=build)
 view_report = st.button('View Report')
 generate_report = st.button('Generate Report')
+corrplot = st.checkbox('Create correlation plots', value=True)
+st.text('Note: You may only generate correlation plots if each pert_plate has > 1 replicate.')
 
 
 def get_file(files, file_string):
@@ -598,19 +600,20 @@ elif generate_report and build:
             except:
                 print(f"Error generating error rate plot.")
 
-            print(f"There are multiple replicates, generating correlation plots.....")
-            if len(mfi.replicate.unique()) > 1:
-                plotting_functions.plot_corrplot(df=corr_df_norm,
-                                                 mfi=mfi,
-                                                 build=build,
-                                                 filename='corrplot_norm.png')
-                plotting_functions.plot_corrplot(df=corr_df_raw,
-                                                 mfi=mfi,
-                                                 build=build,
-                                                 filename='corrplot_raw.png')
-
             print(f"Generating pass/fail table.....")
             df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
+
+            if len(mfi.replicate.unique()) > 1:
+                if corrplot:
+                    print(f"There are multiple replicates, generating correlation plots.....")
+                    plotting_functions.plot_corrplot(df=corr_df_norm,
+                                                     mfi=mfi,
+                                                     build=build,
+                                                     filename='corrplot_norm.png')
+                    plotting_functions.plot_corrplot(df=corr_df_raw,
+                                                     mfi=mfi,
+                                                     build=build,
+                                                     filename='corrplot_raw.png')
 
             print(f"Report generation is complete!")
 
