@@ -133,6 +133,7 @@ def plot_distributions_by_plate(df, build, filename, culture, pert_types=['trt_p
 
 def plot_banana_plots(df, x, y, filename, build, bucket_name='cup.clue.io'):
     data = df[~df.pert_plate.str.contains('BASE')]
+    data.loc[(~data.ccle_name.str.contains('prism')) & (data['pass'] == False), 'bc_type'] = 'cell_line_fail'
     width = len(data['replicate'].unique()) * 400
     height = len(data['pert_plate'].unique()) * 350
     g = px.scatter(data_frame=data,
