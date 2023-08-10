@@ -37,8 +37,10 @@ st.markdown(hide_table_row_index, unsafe_allow_html=True)  # hide table indices 
 
 # AWS/API setup
 API_URL = 'https://api.clue.io/api/'
+DEV_URL = 'https://dev-api.clue.io/api/'
 API_KEY = os.environ['API_KEY']
 BUILDS_URL = API_URL + 'data_build_types/prism-builds'
+SCANNER_URL = DEV_URL + 'lims_plate'
 
 # get list of builds
 builds = prism_metadata.get_data_from_db(
@@ -79,6 +81,8 @@ build = st.selectbox(
 st.experimental_set_query_params(option=build)
 view_report = st.button('View Report')
 generate_report = st.button('Generate Report')
+corrplot = st.checkbox('Create correlation plots', value=True)
+st.text('Note: You may only generate correlation plots if each pert_plate has > 1 replicate.')
 
 
 def get_file(files, file_string):
@@ -164,41 +168,6 @@ def read_json_from_s3(bucket_name, filename, prefix):
     return dict_data
 
 
-def fetch_data_from_db(det_plates):
-    # Database connection parameters
-    db_params = {
-        'host': 'lims.c2kct5xnoka4.us-east-1.rds.amazonaws.com',
-        'user': 'jdavis',  # Replace with your username
-        'password': 'DU;6tsb$;BFc>)',  # Replace with your password
-        'db': 'lims',
-        'charset': 'utf8mb4',
-        'cursorclass': pymysql.cursors.DictCursor
-    }
-
-    try:
-        # Connect to the database
-        connection = pymysql.connect(**db_params)
-        with connection.cursor() as cursor:
-            # Build the SQL query
-            format_strings = ','.join(['%s'] * len(det_plates))
-            sql = f"SELECT scanner_id, det_plate FROM plate WHERE det_plate IN ({format_strings})"
-
-            # Execute the query
-            cursor.execute(sql, tuple(det_plates))
-
-            # Fetch the results
-            results = cursor.fetchall()
-
-        return results
-
-    except Exception as e:
-        print(f"Error fetching data: {e}")
-        return []
-
-    finally:
-        connection.close()
-
-
 # Inputs
 if view_report and build:
 
@@ -234,9 +203,10 @@ if view_report and build:
                                            filename='plate_metadata.json',
                                            prefix=build)
         scanner_table = pd.DataFrame(json.loads(plate_metadata))
-        scanner_table['scanner_id'] = scanner_table['scanner_id'].astype('Int64')
-        scanner_table['median_count'] = scanner_table['median_count'].astype('Int64')
-        scanner_table['iqr_count'] = scanner_table['iqr_count'].astype('Int64')
+        if 'scanner_id' in scanner_table.columns:
+            scanner_table['scanner_id'] = scanner_table['scanner_id'].astype('Int64')
+            scanner_table['median_count'] = scanner_table['median_count'].astype('Int64')
+            scanner_table['iqr_count'] = scanner_table['iqr_count'].astype('Int64')
 
         # Show report
         with st.spinner('Loading report...'):
@@ -287,7 +257,8 @@ if view_report and build:
 
             with st.expander('Bead count'):
                 st.header('Bead Count')
-                st.dataframe(scanner_table.drop(columns=['det_plate']))
+                if 'det_plate' in scanner_table:
+                    st.dataframe(scanner_table.drop(columns=['det_plate']))
                 st.subheader('Build count')
                 st.markdown(descriptions.build_heatmap_count)
                 tab_labels = cultures
@@ -440,16 +411,28 @@ elif generate_report and build:
                              prefix=build,
                              filename=filename)
 
-            # Create plate metadata
+            # Create plate metadata from lims
             det_plates = list(qc.prism_replicate.unique())
-            plate_meta = pd.DataFrame(fetch_data_from_db(det_plates))
+            plate_meta = pd.DataFrame()
+            for plate in plates:
+                response = prism_metadata.get_data_from_db(
+                    endpoint_url=SCANNER_URL,
+                    user_key=API_KEY,
+                    where={"det_plate": plate},
+                    fields=['det_plate','scanner_id']
+                )
+                response = pd.DataFrame(response)
+                plate_meta = pd.concat([plate_meta, response])
+
+
             # Group by 'prism_replicate' and calculate various statistics
             agg_funcs = {
                 'count': ['median', 'std', 'var', lambda x: x.quantile(0.75) - x.quantile(0.25)]
             }
             cnt_meta = cnt.groupby('prism_replicate').agg(agg_funcs).reset_index()
             cnt_meta.columns = ['prism_replicate', 'median_count', 'stdev_count', 'var_count', 'iqr_count']
-            plate_meta = plate_meta.merge(cnt_meta, left_on='det_plate', right_on='prism_replicate', how='right')
+            if 'det_plate' in plate_meta.columns:
+                plate_meta = plate_meta.merge(cnt_meta, left_on='det_plate', right_on='prism_replicate', how='right')
             json_data = plate_meta.to_json()
             write_json_to_s3(data=json_data,
                              bucket=bucket,
@@ -457,9 +440,11 @@ elif generate_report and build:
                              filename='plate_metadata.json')
 
             # add count meta to count df
-            cnt = cnt.merge(plate_meta, on=['prism_replicate'], how='left')
-            cnt['plate'] = cnt['prism_replicate'] + "[" + cnt['scanner_id'].astype('str') + "]"
-            print(cnt)
+            if 'det_plate' in plate_meta.columns:
+                cnt = cnt.merge(plate_meta, on=['prism_replicate'], how='left')
+                cnt['plate'] = cnt['prism_replicate'] + "[" + cnt['scanner_id'].astype('str') + "]"
+            else:
+                cnt['plate'] = cnt['prism_replicate']
 
             # Transform mfi and qc tables
             mfi_out = mfi.pipe(df_transform.add_bc_type)
@@ -593,19 +578,20 @@ elif generate_report and build:
             except:
                 print(f"Error generating error rate plot.")
 
-            print(f"There are multiple replicates, generating correlation plots.....")
-            if len(mfi.replicate.unique()) > 1:
-                plotting_functions.plot_corrplot(df=corr_df_norm,
-                                                 mfi=mfi,
-                                                 build=build,
-                                                 filename='corrplot_norm.png')
-                plotting_functions.plot_corrplot(df=corr_df_raw,
-                                                 mfi=mfi,
-                                                 build=build,
-                                                 filename='corrplot_raw.png')
-
             print(f"Generating pass/fail table.....")
             df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
+
+            if len(mfi.replicate.unique()) > 1:
+                if corrplot:
+                    print(f"There are multiple replicates, generating correlation plots.....")
+                    plotting_functions.plot_corrplot(df=corr_df_norm,
+                                                     mfi=mfi,
+                                                     build=build,
+                                                     filename='corrplot_norm.png')
+                    plotting_functions.plot_corrplot(df=corr_df_raw,
+                                                     mfi=mfi,
+                                                     build=build,
+                                                     filename='corrplot_raw.png')
 
             print(f"Report generation is complete!")
 
