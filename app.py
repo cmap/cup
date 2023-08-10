@@ -37,8 +37,10 @@ st.markdown(hide_table_row_index, unsafe_allow_html=True)  # hide table indices 
 
 # AWS/API setup
 API_URL = 'https://api.clue.io/api/'
+DEV_URL = 'https://dev-api.clue.io/api/'
 API_KEY = os.environ['API_KEY']
 BUILDS_URL = API_URL + 'data_build_types/prism-builds'
+SCANNER_URL = DEV_URL + 'lims_plate'
 
 # get list of builds
 builds = prism_metadata.get_data_from_db(
@@ -164,41 +166,6 @@ def read_json_from_s3(bucket_name, filename, prefix):
     # Convert string data to dictionary
     dict_data = json.loads(string_data)
     return dict_data
-
-
-def fetch_data_from_db(det_plates):
-    # Database connection parameters
-    db_params = {
-        'host': 'lims.c2kct5xnoka4.us-east-1.rds.amazonaws.com',
-        'user': 'jdavis',  # Replace with your username
-        'password': 'DU;6tsb$;BFc>)',  # Replace with your password
-        'db': 'lims',
-        'charset': 'utf8mb4',
-        'cursorclass': pymysql.cursors.DictCursor
-    }
-
-    try:
-        # Connect to the database
-        connection = pymysql.connect(**db_params)
-        with connection.cursor() as cursor:
-            # Build the SQL query
-            format_strings = ','.join(['%s'] * len(det_plates))
-            sql = f"SELECT scanner_id, det_plate FROM plate WHERE det_plate IN ({format_strings})"
-
-            # Execute the query
-            cursor.execute(sql, tuple(det_plates))
-
-            # Fetch the results
-            results = cursor.fetchall()
-
-        return results
-
-    except Exception as e:
-        print(f"Error fetching data: {e}")
-        return []
-
-    finally:
-        connection.close()
 
 
 # Inputs
@@ -444,9 +411,20 @@ elif generate_report and build:
                              prefix=build,
                              filename=filename)
 
-            # Create plate metadata
+            # Create plate metadata from lims
             det_plates = list(qc.prism_replicate.unique())
-            plate_meta = pd.DataFrame(fetch_data_from_db(det_plates))
+            plate_meta = pd.DataFrame()
+            for plate in plates:
+                response = prism_metadata.get_data_from_db(
+                    endpoint_url=SCANNER_URL,
+                    user_key=API_KEY,
+                    where={"det_plate": plate},
+                    fields=['det_plate','scanner_id']
+                )
+                response = pd.DataFrame(response)
+                plate_meta = pd.concat([plate_meta, response])
+
+
             # Group by 'prism_replicate' and calculate various statistics
             agg_funcs = {
                 'count': ['median', 'std', 'var', lambda x: x.quantile(0.75) - x.quantile(0.25)]
