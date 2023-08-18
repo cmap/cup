@@ -259,7 +259,15 @@ if view_report and build:
                 st.header('Bead Count')
                 if 'det_plate' in scanner_table:
                     st.dataframe(scanner_table.drop(columns=['det_plate']))
-                st.subheader('Build count')
+                st.subheader('Count by pool')
+                st.markdown(descriptions.count_by_pool)
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"count_{label}_pert_type_heatmap.png"
+                        load_image_from_s3(filename, prefix=build)
+                st.subheader('Count by plate')
                 st.markdown(descriptions.build_heatmap_count)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
@@ -481,17 +489,23 @@ elif generate_report and build:
 
             print(f"Generating mfi heatmaps by plate/pool.....")
             for culture in cultures:
-                plotting_functions.make_pert_type_heatmaps_by_plate(df=mfi,
-                                                                    build=build,
-                                                                    culture=culture)
+                plotting_functions.make_build_mfi_heatmaps(df=mfi,
+                                                           build=build,
+                                                           culture=culture)
 
             print(f"Generating MFI heatmaps.....")
             plotting_functions.make_pert_type_heatmaps(df=mfi,
                                                        build=build)
 
             print(f"Generating COUNT heatmaps.....")
-            plotting_functions.make_full_count_heatmaps(df=cnt,
-                                                        build=build)
+            plotting_functions.make_build_count_heatmaps(df=cnt,
+                                                         build=build)
+            plotting_functions.make_pert_type_heatmaps(df=cnt,
+                                                       build=build,
+                                                       metric='count',
+                                                       vmax=30,
+                                                       vmin=0,
+                                                       ctl_only=False)
 
             print(f"Generating pass rate plots.....")
             plotting_functions.plot_pass_rates_by_plate(df=qc_out,

@@ -64,3 +64,6 @@ dr_vs_er = 'Dynamic range versus error rate for each cell line on each detection
 
 corr = 'Correlation of logMFI values across replicates. These correlations are calculated on a per compound/dose ' \
        'level across all cell line barcodes. This means that each point on this plot represents a given compound/dose.'
+
+count_by_pool = 'Median bead counts for each well by pool_id. This can be useful in determining if the performance of ' \
+                'a given pool could be influenced by the underlying bead count within that pool.'
