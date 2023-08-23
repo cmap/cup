@@ -291,47 +291,12 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
 
 
-def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):
-    # Create a FacetGrid with multiple plots
-    g = sns.FacetGrid(df[df.pert_type.isin(['ctl_vehicle'])],
-                      row='pert_plate',
-                      col='replicate',
-                      height=4, aspect=1.5,
-                      legend_out=True)
-
-    # Map the boxplot to the FacetGrid
-    g.map(sns.boxplot, 'pert_well', 'logMFI', 'bc_type', linewidth=1.5, hue='bc_type', fliersize=0)
-
-    # Add row and column titles to the FacetGrid
-    for ax in g.axes.flat:
-        ax.set_xlabel('')
-    g.set_titles(col_template='{col_name}', row_template='{row_name}')
-
-    # Set the labels for the x and y axes
-    g.set_axis_labels('', 'logMFI')
-
-    # Rotate the x-axis labels for better readability
-    g.set_xticklabels(rotation=90)
-
-    # Move the legend outside of the plot and create a single legend
-    g.add_legend(title='bc_type', loc='upper right', bbox_to_anchor=(1, 0.5))
-
-    # Save plot as PNG to buffer
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format='png')
-    buffer.seek(0)
-    buffer.seek(0)
-
-    # Upload as PNG to S3
-    s3 = boto3.client('s3')
-    s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
-
-
 def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
     metric = metric
     df['row'] = df['pert_well'].str[0]
     df['col'] = df['pert_well'].str[1:3]
-    data = df[~df.pert_plate.str.contains('BASE')&(df.culture == culture)][['pert_plate', 'replicate', 'row', 'col', metric]]
+    data = df[~df.pert_plate.str.contains('BASE') & (df.culture == culture)][
+        ['pert_plate', 'replicate', 'row', 'col', metric]]
     data_agg = data.groupby(['pert_plate', 'replicate', 'row', 'col']).median().reset_index()
     combinations = data_agg[['pert_plate', 'replicate']].drop_duplicates()
 
@@ -405,58 +370,24 @@ def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
-def plot_historical_mfi(df, metric, filename, bucket_name='cup.clue.io'):
-    unique_builds = df['build'].unique()
-    unique_pert_types = df['pert_type'].unique()
-
-    # Create a subplot with two columns
-    fig = sp.make_subplots(cols=2, subplot_titles=unique_pert_types)
-
-    for col, pert_type in enumerate(unique_pert_types, start=1):
-        hist_data = []
-        group_labels = []
-
-        for build in unique_builds:
-            df_filtered = df[(df['pert_type'] == pert_type) & (df['build'] == build)]
-            hist_data.append(df_filtered[metric])
-            group_labels.append(build)  # Use the build as the group label
-
-        # Create the KDE plot for the current pert_type
-        kde_fig = ff.create_distplot(hist_data, group_labels, show_hist=False, show_rug=False)
-
-        # Add traces from kde_fig to the main figure
-        for trace, build in zip(kde_fig.data, unique_builds):
-            trace.showlegend = col == 1  # Only show legend for the first column
-            trace.legendgroup = build  # Set legendgroup to the build
-            fig.add_trace(trace, row=1, col=col)
-
-    # Update the layout
-    fig.update_layout(showlegend=True,
-                      height=500,
-                      width=1200)
-
-    # Upload as json to s3
-    s3 = boto3.client('s3')
-    fig_json = fig.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"historical/{filename}", Body=fig_json.encode('utf-8'))
-
-
 def make_pert_type_heatmaps(df, build, metric='logMFI'):
     for culture in df.culture.unique():
         # Filter and sort dataframe
-        data = df[(df.culture == culture)&(~df.ccle_name.str.contains('prism'))&(df.pert_type.isin(['trt_poscon','ctl_vehicle']))]\
-        [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(['pert_type', 'pool_id']).dropna(subset=[metric])
+        data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
+            df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
+            [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
+            ['pert_type', 'pool_id']).dropna(subset=[metric])
         data['ccle_pool'] = data.ccle_name + ' ' + data.pool_id
         # Create pivot table
         pivot_table = data.pivot_table(
             values=metric,
             index=['pool_id'],
-            columns=['pert_type','profile_id'],
+            columns=['pert_type', 'profile_id'],
             aggfunc='median')
 
         # Create a colormap for pool_id
         unique_pool_ids = pivot_table.index.unique()
-        colors = plt.cm.tab20(np.linspace(0, 1, len(unique_pool_ids))) # use any other colormap if you wish
+        colors = plt.cm.tab20(np.linspace(0, 1, len(unique_pool_ids)))  # use any other colormap if you wish
         color_dict = dict(zip(unique_pool_ids, range(len(unique_pool_ids))))
 
         # Map pool_ids to integer values
@@ -489,8 +420,10 @@ def make_pert_type_heatmaps(df, build, metric='logMFI'):
         ax1.set_ylabel('')
         ax2.set_xlabel('')
 
-        ax2.annotate("ctl_vehicle", xy=(0.2,1.01), annotation_clip=False, xycoords='axes fraction', textcoords='offset points', xytext=(5,5))
-        ax2.annotate("trt_poscon", xy=(0.69,1.01), annotation_clip=False, xycoords='axes fraction', textcoords='offset points', xytext=(5,5))
+        ax2.annotate("ctl_vehicle", xy=(0.2, 1.01), annotation_clip=False, xycoords='axes fraction',
+                     textcoords='offset points', xytext=(5, 5))
+        ax2.annotate("trt_poscon", xy=(0.69, 1.01), annotation_clip=False, xycoords='axes fraction',
+                     textcoords='offset points', xytext=(5, 5))
 
         # Save the plot to a BytesIO object
         img_data = io.BytesIO()
@@ -506,7 +439,7 @@ def make_pert_type_heatmaps(df, build, metric='logMFI'):
 def make_full_count_heatmaps(df, build, metric='count'):
     for culture in df.culture.unique():
         # Filter and sort dataframe
-        data = df[(df.culture == culture)&(~df.plate.str.contains('BASE'))].sort_values(['plate', 'pert_well'])
+        data = df[(df.culture == culture) & (~df.plate.str.contains('BASE'))].sort_values(['plate', 'pert_well'])
         # Create pivot table
         pivot_table = data.pivot_table(
             values=metric,
@@ -566,75 +499,75 @@ def make_full_count_heatmaps(df, build, metric='count'):
 
 
 def make_pert_type_heatmaps_by_plate(df, build, culture, metric='logMFI'):
-        data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
-            df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
-            [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
-            ['pert_type', 'pool_id']).dropna(subset=[metric])
-        data['ccle_pool'] = data.ccle_name + ' ' + data.pool_id
+    data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
+        df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
+        [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
+        ['pert_type', 'pool_id']).dropna(subset=[metric])
+    data['ccle_pool'] = data.ccle_name + ' ' + data.pool_id
 
-        plates = data.prism_replicate.unique()
+    plates = data.prism_replicate.unique()
 
-        for plate in plates:
-            plate_data = data[data.prism_replicate == plate]
-            # Create pivot table
-            pivot_table = plate_data.pivot_table(
-                values=metric,
-                index=['pool_id'],
-                columns=['pert_type', 'profile_id'],
-                aggfunc='median')
+    for plate in plates:
+        plate_data = data[data.prism_replicate == plate]
+        # Create pivot table
+        pivot_table = plate_data.pivot_table(
+            values=metric,
+            index=['pool_id'],
+            columns=['pert_type', 'profile_id'],
+            aggfunc='median')
 
-            # Create a colormap for pool_id
-            unique_pool_ids = pivot_table.index.unique()
-            colors = plt.cm.tab20(np.linspace(0, 1, len(unique_pool_ids)))  # use any other colormap if you wish
-            color_dict = dict(zip(unique_pool_ids, range(len(unique_pool_ids))))
+        # Create a colormap for pool_id
+        unique_pool_ids = pivot_table.index.unique()
+        colors = plt.cm.tab20(np.linspace(0, 1, len(unique_pool_ids)))  # use any other colormap if you wish
+        color_dict = dict(zip(unique_pool_ids, range(len(unique_pool_ids))))
 
-            # Map pool_ids to integer values
-            color_column = pd.DataFrame([color_dict[pool_id] for pool_id in pivot_table.index],
-                                        index=pivot_table.index,
-                                        columns=['color'])
+        # Map pool_ids to integer values
+        color_column = pd.DataFrame([color_dict[pool_id] for pool_id in pivot_table.index],
+                                    index=pivot_table.index,
+                                    columns=['color'])
 
-            # Create a colormap from unique integers to colors
-            colormap = ListedColormap(colors)
+        # Create a colormap from unique integers to colors
+        colormap = ListedColormap(colors)
 
-            # Create the subplots
-            fig, (ax1, ax2) = plt.subplots(ncols=2, gridspec_kw={'width_ratios': [0.5, 20]}, figsize=(12, 6))
+        # Create the subplots
+        fig, (ax1, ax2) = plt.subplots(ncols=2, gridspec_kw={'width_ratios': [0.5, 20]}, figsize=(12, 6))
 
-            # Plot the color bar as a heatmap with pool_id as yticklabels
-            sns.heatmap(color_column, ax=ax1, cmap=colormap, cbar=False, yticklabels=True, xticklabels=[])
+        # Plot the color bar as a heatmap with pool_id as yticklabels
+        sns.heatmap(color_column, ax=ax1, cmap=colormap, cbar=False, yticklabels=True, xticklabels=[])
 
-            # Rotate yticklabels for better visibility
-            ax1.yaxis.tick_left()  # Move ticks to the right side of color bar
-            for label in ax1.get_yticklabels():
-                label.set_rotation(0)
+        # Rotate yticklabels for better visibility
+        ax1.yaxis.tick_left()  # Move ticks to the right side of color bar
+        for label in ax1.get_yticklabels():
+            label.set_rotation(0)
 
-            # Plot the main heatmap
-            sns.heatmap(pivot_table, ax=ax2, xticklabels=[], yticklabels=False)
+        # Plot the main heatmap
+        sns.heatmap(pivot_table, ax=ax2, xticklabels=[], yticklabels=False)
 
-            # Remove the space between the plots
-            plt.subplots_adjust(wspace=0.01)
+        # Remove the space between the plots
+        plt.subplots_adjust(wspace=0.01)
 
-            # Set the title
-            plt.title(plate, y=1.05)
+        # Set the title
+        plt.title(plate, y=1.05)
 
-            # Remove appropriate labels
-            ax2.set_ylabel('')
-            ax1.set_ylabel('')
-            ax2.set_xlabel('')
+        # Remove appropriate labels
+        ax2.set_ylabel('')
+        ax1.set_ylabel('')
+        ax2.set_xlabel('')
 
-            ax2.annotate("ctl_vehicle", xy=(0.2, 1.01), annotation_clip=False, xycoords='axes fraction',
-                         textcoords='offset points', xytext=(5, 5))
-            ax2.annotate("trt_poscon", xy=(0.69, 1.01), annotation_clip=False, xycoords='axes fraction',
-                         textcoords='offset points', xytext=(5, 5))
+        ax2.annotate("ctl_vehicle", xy=(0.2, 1.01), annotation_clip=False, xycoords='axes fraction',
+                     textcoords='offset points', xytext=(5, 5))
+        ax2.annotate("trt_poscon", xy=(0.69, 1.01), annotation_clip=False, xycoords='axes fraction',
+                     textcoords='offset points', xytext=(5, 5))
 
-            # Save the plot to a BytesIO object
-            img_data = io.BytesIO()
-            plt.savefig(img_data, format='png')
-            img_data.seek(0)  # Rewind the file pointer to the beginning
+        # Save the plot to a BytesIO object
+        img_data = io.BytesIO()
+        plt.savefig(img_data, format='png')
+        img_data.seek(0)  # Rewind the file pointer to the beginning
 
-            object_key = f"{build}/{plate}_{culture}_pert_type_heatmap.png"  # The desired S3 object key (file name)
+        object_key = f"{build}/{plate}_{culture}_pert_type_heatmap.png"  # The desired S3 object key (file name)
 
-            s3 = boto3.client('s3')
-            s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+        s3 = boto3.client('s3')
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
 def generate_cbc_quantile_plot(df, build, culture):
@@ -651,11 +584,12 @@ def generate_cbc_quantile_plot(df, build, culture):
 
     # Create a plot for each unique value
     for i in range(total_plots):
-        subset = df[(df.prism_replicate == unique_values[i]) & (df.culture == culture) & (df.pert_type.isin(['ctl_vehicle', 'ctl_untrt']))]
+        subset = df[(df.prism_replicate == unique_values[i]) & (df.culture == culture) & (
+            df.pert_type.isin(['ctl_vehicle', 'ctl_untrt']))]
 
         # calculate the median for each control barcode
         cbc = subset[subset.ccle_name.str.contains('prism invariant')]
-        cbc_med = cbc[['ccle_name','logMFI']].groupby(['ccle_name']).median()
+        cbc_med = cbc[['ccle_name', 'logMFI']].groupby(['ccle_name']).median()
 
         # get the logMFI values for cell_line
         cl = subset[~subset.ccle_name.str.contains('prism invariant')]['logMFI']
@@ -664,17 +598,17 @@ def generate_cbc_quantile_plot(df, build, culture):
         quantiles_bc = cbc_med['logMFI'].apply(lambda x: df_transform.quantile_of_closest_score(x, cl))
 
         # make dataframe
-        data = pd.DataFrame(quantiles_bc).reset_index().rename(columns={'ccle_name':'bead',
-                                                                        'logMFI':'quantile'})
+        data = pd.DataFrame(quantiles_bc).reset_index().rename(columns={'ccle_name': 'bead',
+                                                                        'logMFI': 'quantile'})
 
         # sort data
         data['sort'] = data['bead'].str.split(' ').str[2].astype('int')
         data.sort_values('sort', inplace=True)
 
         # make plots
-        sns.lineplot(data=data, ax=axes[i], x = 'sort', y='quantile')  # Replace with your function
+        sns.lineplot(data=data, ax=axes[i], x='sort', y='quantile')  # Replace with your function
         axes[i].set_title(f'{unique_values[i]}')  # Optional title for each subplot
-        axes[i].plot([0,10],[0,1], color='grey', linestyle='--')
+        axes[i].plot([0, 10], [0, 1], color='grey', linestyle='--')
         axes[i].set_xlabel('')
         axes[i].set_ylabel('')
 
@@ -695,3 +629,43 @@ def generate_cbc_quantile_plot(df, build, culture):
 
     s3 = boto3.client('s3')
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+
+def plot_instances_removed_by_compound(df, build, filename='plt_rm_instances_by_cp.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'prism_replicate', 'pert_iname']).size().reset_index(name='instances_removed')
+    fig = px.ecdf(data,
+                  x='instances_removed',
+                  color='prism_replicate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Idef nstances removed by compound for each plate')
+    fig.update_layout(yaxis_title="Fraction compounds")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+
+def plot_instances_removed_by_line(df, build, filename='plt_rm_instances_by_line.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'prism_replicate', 'ccle_name']).size().reset_index(name='instances_removed')
+    fig = px.ecdf(data,
+                  x='instances_removed',
+                  color='prism_replicate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Instances removed by cell line for each plate')
+    fig.update_layout(yaxis_title="Fraction cell lines")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))

@@ -99,19 +99,52 @@ def upload_df_to_s3(df, filename, prefix, bucket_name='cup.clue.io'):
 
 
 def load_df_from_s3(filename, prefix, bucket_name='cup.clue.io'):
-    response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
-    csv_bytes = response['Body'].read()
-    csv_buffer = io.StringIO(csv_bytes.decode())
-    df = pd.read_csv(csv_buffer)
-    return df
+    s3 = boto3.client('s3')
+    try:
+        # Check if the object exists by retreiving metadata
+        s3.head_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+
+        # If exustsm proceed
+        response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+        csv_bytes = response['Body'].read()
+        csv_buffer = io.StringIO(csv_bytes.decode())
+        df = pd.read_csv(csv_buffer)
+        return df
+
+    except botocore.exceptions.ClientError as e:
+        st.text('There is at least one file missing, please regenerate report and try again.')
+
+def load_json_table_from_s3(filename, prefix, bucket_name='cup.clue.io'):
+    s3 = boto3.client('s3')
+    try:
+        # Check if the object exists by retreiving metadata
+        s3.head_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+
+        # If no exceptions, proceed
+        response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+        json_bytes = response['Body'].read()
+        json_str = json_bytes.decode()
+        df = pd.read_json(io.StringIO(json_str), orient='records')
+        return df
+
+    except botocore.exceptions.ClientError as e:
+        st.text('There is at least one file missing, please regenerate report and try again.')
 
 
 def load_plot_from_s3(filename, prefix, bucket_name='cup.clue.io'):
     s3 = boto3.client('s3')
-    response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
-    fig_json = response['Body'].read().decode('utf-8')
-    fig = pio.from_json(fig_json)
-    st.plotly_chart(fig)
+    try:
+        # Check if the object exists by retreiving metadata
+        s3.head_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+
+        # If no exception, proceed
+        response = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{filename}")
+        fig_json = response['Body'].read().decode('utf-8')
+        fig = pio.from_json(fig_json)
+        st.plotly_chart(fig)
+
+    except botocore.exceptions.ClientError as e:
+        st.text('There is at least one file missing, please regenerate report and try again.')
 
 
 def load_image_from_s3(filename, prefix, bucket_name='cup.clue.io'):
@@ -155,6 +188,16 @@ def write_json_to_s3(bucket, filename, data, prefix):
     s3.put_object(Body=json_bytes, Bucket=bucket, Key=f"{prefix}/{filename}")
 
 
+def write_json_table_to_s3(bucket, filename, data, prefix):
+    s3 = boto3.client('s3')
+
+    # Convert your JSON string to bytes
+    json_bytes = data.encode()
+
+    # Write the JSON data to an S3 object with specified content type
+    s3.put_object(Body=json_bytes, Bucket=bucket, Key=f"{prefix}/{filename}", ContentType='application/json')
+
+
 def read_json_from_s3(bucket_name, filename, prefix):
     s3 = boto3.client('s3')
     # Get the object from S3
@@ -193,8 +236,8 @@ if view_report and build:
 
         # Get list of cultures
         build_metadata = read_json_from_s3(bucket_name=bucket,
-                                     filename='build_metadata.json',
-                                     prefix=build)
+                                           filename='build_metadata.json',
+                                           prefix=build)
         cultures = build_metadata['culture']
         plates = build_metadata['plates']
 
@@ -288,6 +331,47 @@ if view_report and build:
                         filename = f"{label}_cb_quantiles.png"
                         load_image_from_s3(filename=filename, prefix=build)
 
+            with st.expander('Data removed'):
+                st.header('Instances removed')
+
+                # Establish columns
+                by_plate, by_compound, by_well = st.columns((1, 1.5, 1))
+
+                # Populate columns
+                by_plate.subheader('By plate')
+                tbl_by_plate = load_json_table_from_s3(filename='instances_removed_by_plate_table.json', prefix=build)
+                by_plate.dataframe(tbl_by_plate)
+
+                by_well.subheader('By well')
+                tbl = load_json_table_from_s3(filename='instances_removed_by_well.json',
+                                              prefix=build)
+                by_well.dataframe(tbl)
+
+                by_compound.subheader('By compound')
+                tbl = load_json_table_from_s3(filename='instances_removed_by_compound.json',
+                                              prefix=build)
+                by_compound.dataframe(tbl)
+
+                st.subheader('Plots')
+                load_plot_from_s3(filename='plt_rm_instances_by_line.json', prefix=build)
+                load_plot_from_s3(filename='plt_rm_instances_by_cp.json', prefix=build)
+
+                st.header('Profiles removed')
+
+                # Establish columns
+                by_compound, by_cell = st.columns((1.5,1))
+
+                # Populate columns
+                by_compound.subheader('By compound')
+                tbl = load_json_table_from_s3(filename='profiles_removed_by_compound.json',
+                                              prefix=build)
+                by_compound.dataframe(tbl)
+
+                by_cell.subheader('By cell line')
+                tbl = load_json_table_from_s3(filename='profiles_removed_by_line.json',
+                                              prefix=build)
+
+
             with st.expander('Cell line pass/fail'):
                 # Plot pass rates
                 st.header('Pass rates')
@@ -304,8 +388,10 @@ if view_report and build:
                 st.subheader('Pass/fail table')
                 st.markdown(descriptions.pass_table)
                 pass_fail = load_df_from_s3('pass_fail_table.csv', prefix=build)
-                st.table(pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
-                    subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0, vmax=100))
+                st.table(
+                    pass_fail.reset_index(drop=True).style.bar(subset=['Pass'], color='#006600', vmin=0, vmax=100).bar(
+                        subset=['Fail both', 'Fail error rate', 'Fail dynamic range'], color='#d65f5f', vmin=0,
+                        vmax=100))
 
                 # Plot dynamic range
                 st.header('Dynamic range')
@@ -395,6 +481,11 @@ elif generate_report and build:
             lfc = df_build.lfc
             count = df_build.count
             inst = df_build.inst
+            cell = df_build.cell
+
+            # Get df of instances that are removed
+            instances_removed = df_transform.get_instances_removed(inst=inst, mfi=mfi, cell=cell)
+            profiles_removed = df_transform.profiles_removed(df=mfi)
 
             # Annotate count df
             cnt = df_transform.construct_count_df(count, mfi)
@@ -419,11 +510,10 @@ elif generate_report and build:
                     endpoint_url=SCANNER_URL,
                     user_key=API_KEY,
                     where={"det_plate": plate},
-                    fields=['det_plate','scanner_id']
+                    fields=['det_plate', 'scanner_id']
                 )
                 response = pd.DataFrame(response)
                 plate_meta = pd.concat([plate_meta, response])
-
 
             # Group by 'prism_replicate' and calculate various statistics
             agg_funcs = {
@@ -472,7 +562,71 @@ elif generate_report and build:
                                                                                 index=['pert_iname', 'pert_dose',
                                                                                        'pert_plate']).dropna().reset_index()
 
+            # Make tables of excluded instances
+            print(f"Generating tables of excluded instances....")
+            # By plate
+            instances_removed_by_plate = instances_removed.groupby(['culture', 'prism_replicate']).size().reset_index(
+                name='instances_removed')
+            json_data = instances_removed_by_plate.to_json(orient='records')
+            write_json_table_to_s3(bucket=bucket,
+                                   filename='instances_removed_by_plate_table.json',
+                                   data=json_data,
+                                   prefix=prefix)
+            # By well
+            instances_removed_by_well = instances_removed.groupby(['culture','pert_well']).size().reset_index(name='instances_removed')
+            json_data = instances_removed_by_well.to_json(orient='records')
+            write_json_table_to_s3(bucket=bucket,
+                                   filename='instances_removed_by_well.json',
+                                   data=json_data,
+                                   prefix=prefix)
+
+            # By compound
+            instances_removed_by_compound = instances_removed.groupby(
+                ['culture', 'prism_replicate', 'pert_iname']).size().reset_index(name='instances_removed')
+            json_data = instances_removed_by_compound.to_json(orient='records')
+            write_json_table_to_s3(bucket=bucket,
+                                   filename='instances_removed_by_compound.json',
+                                   data=json_data,
+                                   prefix=prefix)
+
+            # Compound/doses with <2 replicates
+            replicates_by_compound = mfi[~mfi.ccle_name.str.contains('invariant')].groupby(
+                ['culture', 'pert_plate', 'ccle_name', 'pert_iname', 'pert_dose']).size().reset_index(name='n_instances')
+            collapsed_instances_removed = replicates_by_compound[replicates_by_compound.n_instances < 2].drop(
+                columns=['n_instances'])
+            json_data = collapsed_instances_removed.to_json(orient='records')
+            write_json_table_to_s3(bucket=bucket,
+                                   filename='compound_dose_removed.json',
+                                   data=json_data,
+                                   prefix=prefix)
+
+            # Make tables of excluded profiles
+            print(f"Generating tables of excluded profiles...")
+            # By compound
+            profiles_removed_by_compound = profiles_removed.groupby(['culture','pert_plate','pert_iname']).size().reset_index(name='n_profiles')
+            json_data = profiles_removed_by_compound.to_json(orient='records')
+            write_json_table_to_s3(bucket=bucket,
+                                   filename='profiles_removed_by_compound.json',
+                                   data=json_data,
+                                   prefix=prefix)
+
+            # By cell line
+            profiles_removed_by_line = profiles_removed.groupby(['culture','pert_plate','ccle_name']).size().reset_index(name='n_profiles')
+            json_data = profiles_removed_by_line.to_json(orient='records')
+            write_json_table_to_s3(bucket=bucket,
+                                   filename='profiles_removed_by_line.json',
+                                   data=json_data,
+                                   prefix=prefix)
+
+
+
             # Generate and save plots
+            print("Generating profile removal plots....")
+            plotting_functions.plot_instances_removed_by_compound(df=instances_removed,
+                                                                 build=build)
+            plotting_functions.plot_instances_removed_by_line(df=instances_removed,
+                                                             build=build)
+
             print("Generating control barcode quantile plots....")
             for culture in cultures:
                 plotting_functions.generate_cbc_quantile_plot(df=mfi,
@@ -510,11 +664,6 @@ elif generate_report and build:
                                                   metric='dr_raw',
                                                   build=build,
                                                   filename='dr_raw.json')
-
-            print(f"Generating DMSO performance plots.....")
-            plotting_functions.plot_dmso_performance(df=mfi_out,
-                                                     build=build,
-                                                     filename='dmso_perf.png')
 
             print(f"Generating plate distribution plots.....")
             for culture in cultures:
