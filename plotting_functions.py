@@ -638,7 +638,7 @@ def plot_instances_removed_by_compound(df, build, filename='plt_rm_instances_by_
                   color='prism_replicate',
                   facet_col='culture',
                   template='plotly_white',
-                  title='Idef nstances removed by compound for each plate')
+                  title='Instances removed by compound for each plate')
     fig.update_layout(yaxis_title="Fraction compounds")
     # Modify facet titles
     for annotation in fig.layout.annotations:

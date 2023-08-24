@@ -334,6 +334,8 @@ if view_report and build:
             with st.expander('Data removed'):
                 st.header('Instances removed')
 
+                st.markdown(descriptions.instances_removed)
+
                 # Establish columns
                 by_plate, by_compound, by_well = st.columns((1, 1.5, 1))
 
@@ -357,9 +359,10 @@ if view_report and build:
                 load_plot_from_s3(filename='plt_rm_instances_by_cp.json', prefix=build)
 
                 st.header('Profiles removed')
+                st.markdown(descriptions.profiles_removed)
 
                 # Establish columns
-                by_compound, by_cell = st.columns((1.5,1))
+                by_compound, by_cell = st.columns((1,1.5))
 
                 # Populate columns
                 by_compound.subheader('By compound')
@@ -370,6 +373,7 @@ if view_report and build:
                 by_cell.subheader('By cell line')
                 tbl = load_json_table_from_s3(filename='profiles_removed_by_line.json',
                                               prefix=build)
+                by_cell.dataframe(tbl)
 
 
             with st.expander('Cell line pass/fail'):
