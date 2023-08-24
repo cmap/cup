@@ -669,3 +669,45 @@ def plot_instances_removed_by_line(df, build, filename='plt_rm_instances_by_line
     s3 = boto3.client('s3')
     fig_json = fig.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+
+def plot_profiles_removed_by_line(df, build, filename='plt_rm_profiles_by_line.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'pert_plate', 'ccle_name']).size().reset_index(name='profiles_removed')
+    fig = px.ecdf(data,
+                  x='profiles_removed',
+                  color='pert_plate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Profiles removed by cell line for each plate')
+    fig.update_layout(yaxis_title="Fraction cell lines")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+
+def plot_profiles_removed_by_compound(df, build, filename='plt_rm_profiles_by_cp.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'pert_plate', 'pert_iname']).size().reset_index(name='profiles_removed')
+    fig = px.ecdf(data,
+                  x='profiles_removed',
+                  color='pert_plate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Instances removed by compound for each plate')
+    fig.update_layout(yaxis_title="Fraction compounds")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+

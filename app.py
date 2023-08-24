@@ -375,6 +375,12 @@ if view_report and build:
                                               prefix=build)
                 by_cell.dataframe(tbl)
 
+                st.subheader('Plots')
+                load_plot_from_s3(filename='plt_rm_profiles_by_cp.json',
+                                  prefix=build)
+                load_plot_from_s3(filename='plt_rm_profiles_by_line.json',
+                                  prefix=build)
+
 
             with st.expander('Cell line pass/fail'):
                 # Plot pass rates
@@ -625,10 +631,16 @@ elif generate_report and build:
 
 
             # Generate and save plots
-            print("Generating profile removal plots....")
+            print("Generating instance removal plots....")
             plotting_functions.plot_instances_removed_by_compound(df=instances_removed,
                                                                  build=build)
             plotting_functions.plot_instances_removed_by_line(df=instances_removed,
+                                                             build=build)
+
+            print("Generating profile removal plots....")
+            plotting_functions.plot_profiles_removed_by_compound(df=profiles_removed,
+                                                                 build=build)
+            plotting_functions.plot_profiles_removed_by_line(df=profiles_removed,
                                                              build=build)
 
             print("Generating control barcode quantile plots....")
