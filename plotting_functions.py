@@ -14,6 +14,7 @@ import plotly.subplots as sp
 import plotly.io as pio
 from matplotlib.colors import ListedColormap
 import df_transform
+import math
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
