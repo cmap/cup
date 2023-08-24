@@ -82,11 +82,17 @@ def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
 
 
 def plot_pass_rates_by_pool(df, build, filename, bucket_name='cup.clue.io'):
+    n_plates = len(df.prism_replicate.unique())
+    height = math.ceil(n_plates / 3) * 300
     g = px.histogram(data_frame=df,
                      x='pool_id',
                      y='pass',
                      histfunc='count',
-                     color='pass')
+                     color='pass',
+                     facet_col='prism_replicate',
+                     facet_col_wrap=3,
+                     width=1200,
+                     height=height)
 
     # Upload as json to s3
     s3 = boto3.client('s3')
