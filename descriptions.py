@@ -75,3 +75,5 @@ instances_removed = 'Instances refer to individual datapoints, in this case a pa
                      'constructed when we have at least 2 available instances. Possible reasons for an instance being ' \
                     'removed may be low bead count, low control signal, or a treatment well being skipped by lab ' \
                      'instrumentation.'
+
+count_by_pool = 'Median count across all cell lines in a given pool.'
