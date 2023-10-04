@@ -14,7 +14,6 @@ import plotly.subplots as sp
 import plotly.io as pio
 from matplotlib.colors import ListedColormap
 import df_transform
-from plotly.subplots import make_subplots
 import math
 
 dr_threshold = -np.log2(0.3)
@@ -299,42 +298,6 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
 
 
-def plot_dmso_performance(df, build, filename, bucket_name='cup.clue.io'):
-    # Create a FacetGrid with multiple plots
-    g = sns.FacetGrid(df[df.pert_type.isin(['ctl_vehicle'])],
-                      row='pert_plate',
-                      col='replicate',
-                      height=4, aspect=1.5,
-                      legend_out=True)
-
-    # Map the boxplot to the FacetGrid
-    g.map(sns.boxplot, 'pert_well', 'logMFI', 'bc_type', linewidth=1.5, hue='bc_type', fliersize=0)
-
-    # Add row and column titles to the FacetGrid
-    for ax in g.axes.flat:
-        ax.set_xlabel('')
-    g.set_titles(col_template='{col_name}', row_template='{row_name}')
-
-    # Set the labels for the x and y axes
-    g.set_axis_labels('', 'logMFI')
-
-    # Rotate the x-axis labels for better readability
-    g.set_xticklabels(rotation=90)
-
-    # Move the legend outside of the plot and create a single legend
-    g.add_legend(title='bc_type', loc='upper right', bbox_to_anchor=(1, 0.5))
-
-    # Save plot as PNG to buffer
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format='png')
-    buffer.seek(0)
-    buffer.seek(0)
-
-    # Upload as PNG to S3
-    s3 = boto3.client('s3')
-    s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
-
-
 def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
     metric = metric
     df['row'] = df['pert_well'].str[0]
@@ -414,18 +377,14 @@ def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
-def make_pert_type_heatmaps(df, build, metric='logMFI', ctl_only=True, vmax=None, vmin=None):
+def make_pert_type_heatmaps(df, build, metric='logMFI'):
     for culture in df.culture.unique():
         # Filter and sort dataframe
-        if ctl_only:
-            data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
-                df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
-                [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
-                ['pert_type', 'pool_id']).dropna(subset=[metric])
-        else:
-            data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism'))] \
-                [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
-                ['pert_type', 'pool_id']).dropna(subset=[metric])
+        data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
+            df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
+            [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
+            ['pert_type', 'pool_id']).dropna(subset=[metric])
+        data['ccle_pool'] = data.ccle_name + ' ' + data.pool_id
         # Create pivot table
         pivot_table = data.pivot_table(
             values=metric,
@@ -469,11 +428,10 @@ def make_pert_type_heatmaps(df, build, metric='logMFI', ctl_only=True, vmax=None
         ax1.set_ylabel('')
         ax2.set_xlabel('')
 
-        if ctl_only:
-            ax2.annotate("ctl_vehicle", xy=(0.2, 1.01), annotation_clip=False, xycoords='axes fraction',
-                         textcoords='offset points', xytext=(5, 5))
-            ax2.annotate("trt_poscon", xy=(0.69, 1.01), annotation_clip=False, xycoords='axes fraction',
-                         textcoords='offset points', xytext=(5, 5))
+        ax2.annotate("ctl_vehicle", xy=(0.2, 1.01), annotation_clip=False, xycoords='axes fraction',
+                     textcoords='offset points', xytext=(5, 5))
+        ax2.annotate("trt_poscon", xy=(0.69, 1.01), annotation_clip=False, xycoords='axes fraction',
+                     textcoords='offset points', xytext=(5, 5))
 
         # Save the plot to a BytesIO object
         img_data = io.BytesIO()
@@ -551,7 +509,7 @@ def make_build_count_heatmaps(df, build, metric='count'):
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
-def make_build_mfi_heatmaps(df, build, culture, metric='logMFI'):
+def make_pert_type_heatmaps_by_plate(df, build, culture, metric='logMFI'):
     data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
         df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
         [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
@@ -682,3 +640,85 @@ def generate_cbc_quantile_plot(df, build, culture):
 
     s3 = boto3.client('s3')
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+
+def plot_instances_removed_by_compound(df, build, filename='plt_rm_instances_by_cp.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'prism_replicate', 'pert_iname']).size().reset_index(name='instances_removed')
+    fig = px.ecdf(data,
+                  x='instances_removed',
+                  color='prism_replicate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Instances removed by compound for each plate')
+    fig.update_layout(yaxis_title="Fraction compounds")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+
+def plot_instances_removed_by_line(df, build, filename='plt_rm_instances_by_line.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'prism_replicate', 'ccle_name']).size().reset_index(name='instances_removed')
+    fig = px.ecdf(data,
+                  x='instances_removed',
+                  color='prism_replicate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Instances removed by cell line for each plate')
+    fig.update_layout(yaxis_title="Fraction cell lines")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+
+def plot_profiles_removed_by_line(df, build, filename='plt_rm_profiles_by_line.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'pert_plate', 'ccle_name']).size().reset_index(name='profiles_removed')
+    fig = px.ecdf(data,
+                  x='profiles_removed',
+                  color='pert_plate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Profiles removed by cell line for each plate')
+    fig.update_layout(yaxis_title="Fraction cell lines")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+
+def plot_profiles_removed_by_compound(df, build, filename='plt_rm_profiles_by_cp.json', bucket_name='cup.clue.io'):
+    data = df.groupby(['culture', 'pert_plate', 'pert_iname']).size().reset_index(name='profiles_removed')
+    fig = px.ecdf(data,
+                  x='profiles_removed',
+                  color='pert_plate',
+                  facet_col='culture',
+                  template='plotly_white',
+                  title='Instances removed by compound for each plate')
+    fig.update_layout(yaxis_title="Fraction compounds")
+    # Modify facet titles
+    for annotation in fig.layout.annotations:
+        if "culture=" in annotation.text:
+            annotation.text = annotation.text.split('=')[-1]
+
+    # Upload as json to s3
+    s3 = boto3.client('s3')
+    fig_json = fig.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+

@@ -65,5 +65,13 @@ dr_vs_er = 'Dynamic range versus error rate for each cell line on each detection
 corr = 'Correlation of logMFI values across replicates. These correlations are calculated on a per compound/dose ' \
        'level across all cell line barcodes. This means that each point on this plot represents a given compound/dose.'
 
-count_by_pool = 'Median bead counts for each well by pool_id. This can be useful in determining if the performance of ' \
-                'a given pool could be influenced by the underlying bead count within that pool.'
+profiles_removed = 'Profiles refer to replicate collapsed level 5 data. If a profile is removed,' \
+                   'it means that we have no data available for a particular compound & dose combination. This occurs' \
+                    'when we have less than 2 valid instances for a given condition.'
+
+instances_removed = 'Instances refer to individual datapoints, in this case a particular cell line in a particular ' \
+                     'detection well. If an instance is removed, we lose a single replicate of a profile. This does ' \
+                     'not necessarily mean that we have no profile for a given compound & does, as profiles are ' \
+                     'constructed when we have at least 2 available instances. Possible reasons for an instance being ' \
+                    'removed may be low bead count, low control signal, or a treatment well being skipped by lab ' \
+                     'instrumentation.'

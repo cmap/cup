@@ -62,7 +62,7 @@ def pivot_dmso_bort(df):
     dmso_mad = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).agg(
         lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI': 'ctl_vehicle_mad'})
-    #dmso_mad = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
+    # dmso_mad = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
     #    columns={'logMFI': 'ctl_vehicle_mad'})
 
     bort_med = data[data.pert_type == 'trt_poscon'].groupby(group_cols).median().reset_index().rename(
@@ -71,7 +71,7 @@ def pivot_dmso_bort(df):
     bort_mad = data[data.pert_type == 'trt_poscon'].groupby(group_cols).agg(
         lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI': 'trt_poscon_mad'})
-    #bort_mad = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
+    # bort_mad = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
     #    columns={'logMFI': 'trt_poscon_mad'})
 
     out = dmso_med.merge(dmso_mad, on=merge_cols).merge(bort_med, on=merge_cols).merge(bort_mad, on=merge_cols)
@@ -93,7 +93,7 @@ def pivot_dmso_bort(df):
     dmso_mad_norm = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).agg(
         lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI_norm': 'ctl_vehicle_mad_norm'})
-    #dmso_mad_norm = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
+    # dmso_mad_norm = data[data.pert_type == 'ctl_vehicle'].groupby(group_cols).mad().reset_index().rename(
     #    columns={'logMFI_norm': 'ctl_vehicle_mad_norm'})
 
     bort_med_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).median().reset_index().rename(
@@ -102,7 +102,7 @@ def pivot_dmso_bort(df):
     bort_mad_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).agg(
         lambda x: compute_mad(x)).reset_index().rename(
         columns={'logMFI_norm': 'trt_poscon_mad_norm'})
-    #bort_mad_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
+    # bort_mad_norm = data[data.pert_type == 'trt_poscon'].groupby(group_cols).mad().reset_index().rename(
     #    columns={'logMFI_norm': 'trt_poscon_mad_norm'})
 
     out_norm = dmso_med_norm.merge(dmso_mad_norm, on=merge_cols).merge(bort_med_norm, on=merge_cols).merge(
@@ -162,11 +162,13 @@ def generate_pass_fail_tbl(mfi, qc, prefix, bucket='cup.clue.io'):
 
 def append_raw_dr(mfi, qc):
     bort = \
-    mfi[mfi.pert_type == 'trt_poscon'].groupby(['prism_replicate', 'ccle_name', 'pert_type']).median().reset_index()[
-        ['prism_replicate', 'ccle_name', 'logMFI']]
+        mfi[mfi.pert_type == 'trt_poscon'].groupby(
+            ['prism_replicate', 'ccle_name', 'pert_type']).median().reset_index()[
+            ['prism_replicate', 'ccle_name', 'logMFI']]
     dmso = \
-    mfi[mfi.pert_type == 'ctl_vehicle'].groupby(['prism_replicate', 'ccle_name', 'pert_type']).median().reset_index()[
-        ['prism_replicate', 'ccle_name', 'logMFI']]
+        mfi[mfi.pert_type == 'ctl_vehicle'].groupby(
+            ['prism_replicate', 'ccle_name', 'pert_type']).median().reset_index()[
+            ['prism_replicate', 'ccle_name', 'logMFI']]
     dr = dmso.merge(bort, on=['prism_replicate', 'ccle_name'], suffixes=('_dmso', '_bort'))
     dr['dr_raw'] = dr['logMFI_dmso'] - dr['logMFI_bort']
     dr = dr[['prism_replicate', 'ccle_name', 'dr_raw']]
@@ -178,10 +180,10 @@ def construct_count_df(count, mfi):
     count['culture'] = count['cid'].str.split('_').str[1]
     count.loc[count.culture == 'PR300P', 'culture'] = 'PR300'
     count['rid'] = count['rid'] + '_' + count['culture']
-    res = count.merge(mfi[['profile_id', 'rid', 'prism_replicate', 'pool_id', 'pert_well',
-                           'pert_plate', 'replicate', 'pert_type', 'ccle_name']], left_on=['rid', 'cid'],
+    res = count.merge(mfi[['profile_id', 'rid', 'prism_replicate', 'pool_id', 'pert_well', 'pert_plate', 'replicate']],
+                      left_on=['rid', 'cid'],
                       right_on=['rid', 'profile_id'], how='left').dropna()
-    res.rename(columns={'value':'count'}, inplace=True)
+    res.rename(columns={'value': 'count'}, inplace=True)
     return res
 
 
@@ -189,3 +191,45 @@ def construct_count_df(count, mfi):
 def quantile_of_closest_score(value, scores):
     closest_value_index = (np.abs(scores - value)).argmin()
     return pd.Series(scores).rank(pct=True).iloc[closest_value_index]
+
+
+def get_instances_removed(inst: pd.DataFrame, mfi: pd.DataFrame, cell: pd.DataFrame) -> pd.DataFrame:
+    # Assign values to 'culture' column based on conditions
+    conditions_inst = [inst.profile_id.str.contains('PR300'), inst.profile_id.str.contains('PR500')]
+    choices_inst = ['PR300', 'PR500']
+    inst['culture'] = np.select(conditions_inst, choices_inst, default=None)
+
+    conditions_cell = [cell.davepool_id.str.contains('CS14'), cell.davepool_id.str.contains('CS5.')]
+    choices_cell = ['PR300', 'PR500']
+    cell['culture'] = np.select(conditions_cell, choices_cell, default=None)
+
+    # Cross join cell and inst on 'culture'
+    expected_instances = cell.merge(inst[['pert_plate', 'pert_well', 'replicate', 'culture', 'prism_replicate']],
+                                   on='culture', how='outer')
+
+    # Merge and filter to get instances_removed
+    instances_removed = mfi.merge(expected_instances,
+                                 on=['ccle_name', 'culture', 'pert_plate', 'pert_well', 'replicate', 'pool_id',
+                                     'prism_replicate'],
+                                 how='right')
+
+    instances_removed = instances_removed[instances_removed.pert_id.isna()]
+
+    # Merge with inst to get additional columns
+    instances_removed = instances_removed.merge(
+        inst[['prism_replicate', 'pert_well', 'pert_id', 'pert_iname', 'pert_dose']],
+        on=['prism_replicate', 'pert_well'],
+        how='left')
+
+    # Rename columns
+    instances_removed.rename(columns={'pert_iname_y': 'pert_iname',
+                                     'pert_dose_y': 'pert_dose',
+                                     'pert_id_y': 'pert_id'}, inplace=True)
+
+    return instances_removed
+
+
+def profiles_removed(df):
+    replicates_by_compound = df[~df.ccle_name.str.contains('invariant')].groupby(['culture','pert_plate','ccle_name','pert_iname','pert_dose']).size().reset_index(name='n_profiles')
+    res = replicates_by_compound[replicates_by_compound.n_profiles < 2].drop(columns=['n_profiles'])
+    return res
