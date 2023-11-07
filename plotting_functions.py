@@ -377,10 +377,11 @@ def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
-def make_pert_type_heatmaps(df, build, metric='logMFI'):
+def make_pert_type_heatmaps(df, build, vmax, vmin, metric='logMFI'):
     for culture in df.culture.unique():
+
         # Filter and sort dataframe
-        data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
+        data = df[(df.culture == culture) & (
             df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
             [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
             ['pert_type', 'pool_id']).dropna(subset=[metric])
@@ -450,11 +451,11 @@ def make_pert_type_heatmaps(df, build, metric='logMFI'):
 def make_build_count_heatmaps(df, build, metric='count'):
     for culture in df.culture.unique():
         # Filter and sort dataframe
-        data = df[(df.culture == culture) & (~df.plate.str.contains('BASE'))].sort_values(['plate', 'pert_well'])
+        data = df[(df.culture == culture) & (~df.prism_replicate.str.contains('BASE'))].sort_values(['prism_replicate', 'pert_well'])
         # Create pivot table
         pivot_table = data.pivot_table(
             values=metric,
-            index=['plate'],
+            index=['prism_replicate'],
             columns=['pert_well'],
             aggfunc='median')
 
@@ -722,3 +723,63 @@ def plot_profiles_removed_by_compound(df, build, filename='plt_rm_profiles_by_cp
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
+def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
+    for culture in df.culture.unique():
+        # Filter and sort dataframe
+        data = df[(df.culture == culture) & (~df.prism_replicate.str.contains('BASE'))].sort_values(['prism_replicate', 'pert_well'])
+        # Create pivot table
+        pivot_table = data.pivot_table(
+            values=metric,
+            index=['prism_replicate'],
+            columns=['pert_well'],
+            aggfunc='median')
+
+        # Create a colormap for pool_id
+        unique_replicates = pivot_table.index.unique()
+        colors = plt.cm.tab20(np.linspace(0, 1, len(unique_replicates)))  # use any other colormap if you wish
+        color_dict = dict(zip(unique_replicates, range(len(unique_replicates))))
+
+        # Map pool_ids to integer values
+        color_column = pd.DataFrame([color_dict[prism_replicate] for prism_replicate in pivot_table.index],
+                                    index=pivot_table.index,
+                                    columns=['color'])
+
+        # Create a colormap from unique integers to colors
+        colormap = ListedColormap(colors)
+
+        # Create the subplots
+        fig, (ax1, ax2) = plt.subplots(ncols=2, gridspec_kw={'width_ratios': [0.5, 20]}, figsize=(12, 6))
+
+        # Plot the color bar as a heatmap with pool_id as yticklabels
+        sns.heatmap(color_column, ax=ax1, cmap=colormap, cbar=False, yticklabels=True, xticklabels=[])
+
+        # Rotate yticklabels for better visibility
+        ax1.yaxis.tick_left()  # Move ticks to the right side of color bar
+        for label in ax1.get_yticklabels():
+            label.set_rotation(0)
+
+        # Plot the main heatmap
+        sns.heatmap(pivot_table, ax=ax2, xticklabels=[], yticklabels=False, vmin=vmin, vmax=vmax)
+
+        # Remove the space between the plots
+        plt.subplots_adjust(wspace=0.01)
+
+        # Remove appropriate labels
+        ax2.set_ylabel('')
+        ax1.set_ylabel('')
+        ax2.set_xlabel('')
+
+        ax2.set_xlabel('pert_well', size=12)
+
+        # Pad plot to preserve xtick labels
+        plt.tight_layout(pad=1.5)
+
+        # Save the plot to a BytesIO object
+        img_data = io.BytesIO()
+        plt.savefig(img_data, format='png')
+        img_data.seek(0)  # Rewind the file pointer to the beginning
+
+        object_key = f"{build}/{culture}_mfi_heatmap.png"  # The desired S3 object key (file name)
+
+        s3 = boto3.client('s3')
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)

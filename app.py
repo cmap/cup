@@ -661,21 +661,24 @@ elif generate_report and build:
             for culture in cultures:
                 plotting_functions.make_build_mfi_heatmaps(df=mfi,
                                                            build=build,
-                                                           culture=culture)
+                                                           vmax=16,
+                                                           vmin=4)
 
             print(f"Generating MFI heatmaps.....")
             plotting_functions.make_pert_type_heatmaps(df=mfi,
-                                                       build=build)
+                                                       build=build,
+                                                       vmax=16,
+                                                       vmin=4)
 
             print(f"Generating COUNT heatmaps.....")
-            plotting_functions.make_build_count_heatmaps(df=cnt,
+            plotting_functions.make_build_count_heatmaps(df=mfi,
                                                          build=build)
-            plotting_functions.make_pert_type_heatmaps(df=cnt,
+            
+            plotting_functions.make_pert_type_heatmaps(df=mfi,
                                                        build=build,
                                                        metric='count',
                                                        vmax=30,
-                                                       vmin=0,
-                                                       ctl_only=False)
+                                                       vmin=0)
 
             print(f"Generating pass rate plots.....")
             plotting_functions.plot_pass_rates_by_plate(df=qc_out,

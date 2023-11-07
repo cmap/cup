@@ -1,2 +1,8 @@
 /.idea/misc.xml
 .idea
+__pycache__/descriptions.cpython-310.pyc
+__pycache__/df_transform.cpython-310.pyc
+__pycache__/plotting_functions.cpython-310.pyc
+__pycache__/read_build.cpython-310.pyc
+metadata/__pycache__/__init__.cpython-310.pyc
+metadata/__pycache__/prism_metadata.cpython-310.pyc

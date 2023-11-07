@@ -7,6 +7,7 @@ import cmapPy.pandasGEXpress
 from cmapPy.pandasGEXpress.parse import parse
 import tempfile
 import shutil
+from botocore.exceptions import ClientError
 
 
 class Build:
@@ -33,7 +34,7 @@ def parse_gctx(filepath):
 def read_build_from_s3(build_name, s3_bucket='macchiato.clue.io', prefix='builds', suffix='build', exclude_base=False,
                        data_levels=None):
     if data_levels is None:
-        data_levels = ['inst', 'mfi', 'lfc', 'lfc_combat', 'lfc_rep', 'lfc_collapse', 'qc', 'count', 'cell']
+        data_levels = ['inst', 'mfi', 'lfc', 'lfc_combat', 'lfc_rep', 'lfc_rep_combat', 'qc', 'count', 'cell']
     s3 = boto3.client('s3')
 
     build_instance = Build()
@@ -60,9 +61,10 @@ def read_build_from_s3(build_name, s3_bucket='macchiato.clue.io', prefix='builds
             data_level = 'lfc'
         elif ('level4_combat' in data_levels or 'lfc_combat' in data_levels) and 'LEVEL4_LFC_COMBAT' in filename:
             data_level = 'lfc_combat'
-        elif (
-                'level5' in data_levels or 'lfc_rep' in data_levels) and 'LEVEL5_LFC' in filename and 'COMBAT' not in filename:
+        elif ('level5' in data_levels or 'lfc_rep' in data_levels) and 'LEVEL5_LFC' in filename and 'COMBAT' not in filename:
             data_level = 'lfc_rep'
+        elif ('level5_combat' in data_levels or 'lfc_rep_combat' in data_levels) and 'LEVEL5_LFC_COMBAT' in filename:
+            data_level = 'lfc_rep_combat'
         elif 'qc' in data_levels and 'QC_TABLE' in filename:
             data_level = 'qc'
         elif 'count' in data_levels and 'COUNT' in filename:
@@ -125,9 +127,29 @@ def read_table_from_s3(s3_uri: str) -> pd.DataFrame:
     # Initialize the S3 client
     s3 = boto3.client("s3")
 
+    # Check if the S3 object exists
+    try:
+        s3.head_object(Bucket=bucket_name, Key=key)
+    except ClientError as e:
+        # If a client error is thrown, then check that it was a 404 error.
+        # If it was a 404 error, then the object does not exist.
+        error_code = int(e.response['Error']['Code'])
+        if error_code == 404:
+            print(f"S3 object {s3_uri} does not exist.")
+            return None
+        else:
+            # Propagate other exceptions.
+            raise
+
+    print(f"Reading file {s3_uri}")
+
     # Download the file from S3 into a bytes buffer
     obj = s3.get_object(Bucket=bucket_name, Key=key)
     data = BytesIO(obj["Body"].read())
+
+    # Check if the file is gzipped
+    if key.endswith('.gz'):
+        data = gzip.GzipFile(fileobj=data)
 
     # Determine the delimiter
     line = data.readline().decode("utf-8")
@@ -139,3 +161,5 @@ def read_table_from_s3(s3_uri: str) -> pd.DataFrame:
     # Read the file into a pandas DataFrame using the detected delimiter
     df = pd.read_csv(data, delimiter=delimiter)
     return df
+
+
