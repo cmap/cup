@@ -40,7 +40,7 @@ API_URL = 'https://api.clue.io/api/'
 DEV_URL = 'https://dev-api.clue.io/api/'
 API_KEY = os.environ['API_KEY']
 BUILDS_URL = API_URL + 'data_build_types/prism-builds'
-SCANNER_URL = DEV_URL + 'lims_plate'
+SCANNER_URL = API_URL + 'lims_plate'
 
 # get list of builds
 builds = prism_metadata.get_data_from_db(
@@ -234,12 +234,13 @@ if view_report and build:
     if set(expected_plots).issubset(set(existing_plots)):
         print(f"All of the necessary plots already exist, generating output.")
 
-        # Get list of cultures
+        # Get build metadata
         build_metadata = read_json_from_s3(bucket_name=bucket,
                                            filename='build_metadata.json',
                                            prefix=build)
         cultures = build_metadata['culture']
         plates = build_metadata['plates']
+        pert_plates = build_metadata['pert_plates']
 
         # Get plate metadata
         plate_metadata = read_json_from_s3(bucket_name=bucket,
@@ -267,17 +268,6 @@ if view_report and build:
                     with tab:
                         filename = f"{label}_pert_type_heatmap.png"
                         load_image_from_s3(filename=filename, prefix=build)
-
-                st.subheader('Controls')
-                st.markdown(descriptions.plate_heatmap_ctl_mfi)
-                tab_labels = cultures
-                tabs = st.tabs(tab_labels)
-                for label, tab in zip(tab_labels, tabs):
-                    with tab:
-                        selected_plates = [plate for plate in plates if label in plate and 'BASE' not in plate]
-                        for plate in selected_plates:
-                            filename = f"{plate}_{label}_pert_type_heatmap.png"
-                            load_image_from_s3(filename=filename, prefix=build)
 
                 # Show plate heatmaps
                 st.subheader('Plate')
@@ -330,13 +320,22 @@ if view_report and build:
 
             with st.expander('Control barcodes'):
                 # control barcode quantiles
-                st.header('Control barcode performance')
+                st.header('Control barcode quantiles')
                 st.markdown(descriptions.ctl_quantiles)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
                 for label, tab in zip(tab_labels, tabs):
                     with tab:
                         filename = f"{label}_cb_quantiles.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+
+                # control barcode variability
+                st.header('Control barcode variability')
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_ctl_violin.png"
                         load_image_from_s3(filename=filename, prefix=build)
 
             with st.expander('Data removed'):
@@ -362,10 +361,6 @@ if view_report and build:
                                               prefix=build)
                 by_compound.dataframe(tbl)
 
-                st.subheader('Plots')
-                load_plot_from_s3(filename='plt_rm_instances_by_line.json', prefix=build)
-                load_plot_from_s3(filename='plt_rm_instances_by_cp.json', prefix=build)
-
                 st.header('Profiles removed')
                 st.markdown(descriptions.profiles_removed)
 
@@ -382,13 +377,6 @@ if view_report and build:
                 tbl = load_json_table_from_s3(filename='profiles_removed_by_line.json',
                                               prefix=build)
                 by_cell.dataframe(tbl)
-
-                st.subheader('Plots')
-                load_plot_from_s3(filename='plt_rm_profiles_by_cp.json',
-                                  prefix=build)
-                load_plot_from_s3(filename='plt_rm_profiles_by_line.json',
-                                  prefix=build)
-
 
             with st.expander('Cell line pass/fail'):
                 # Plot pass rates
@@ -459,16 +447,19 @@ if view_report and build:
                         with tab:
                             filename = f"{label}_plate_dist_norm.png"
                             load_image_from_s3(filename=filename, prefix=build)
+
             # Plot correlations
-            if check_file_exists(file_name=f"{build}/corrplot_raw.png", bucket_name='cup.clue.io'):
-                with st.expander('Correlations'):
-                    st.header('Correlations')
-                    st.markdown(descriptions.corr)
-                    norm, raw = st.tabs(['Normalized', 'Raw'])
-                    with raw:
-                        load_image_from_s3(filename='corrplot_raw.png', prefix=build)
-                    with norm:
-                        load_image_from_s3(filename='corrplot_norm.png', prefix=build)
+            with st.expander('Correlations'):
+                st.header('Correlations')
+                st.markdown(descriptions.corr)
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        for pert_plate in pert_plates:
+                            filename=f"{pert_plate}:{label}_corrplot.png"
+                            load_image_from_s3(filename=filename, prefix=build)
+
 
     else:
         st.text('Some content is missing from this report, try generating it again.\
@@ -511,8 +502,10 @@ elif generate_report and build:
             # Save list of cultures to metadata json
             cultures = list(mfi.culture.unique())
             plates = list(mfi.prism_replicate.unique())
+            pert_plates = list(mfi.pert_plate.unique())
             json_data = {'culture': cultures,
-                         'plates': plates}
+                         'plates': plates,
+                         'pert_plates': pert_plates}
 
             filename = 'build_metadata.json'
             write_json_to_s3(data=json_data,
@@ -639,17 +632,11 @@ elif generate_report and build:
 
 
             # Generate and save plots
-            print("Generating instance removal plots....")
-            plotting_functions.plot_instances_removed_by_compound(df=instances_removed,
-                                                                 build=build)
-            plotting_functions.plot_instances_removed_by_line(df=instances_removed,
-                                                             build=build)
-
-            print("Generating profile removal plots....")
-            plotting_functions.plot_profiles_removed_by_compound(df=profiles_removed,
-                                                                 build=build)
-            plotting_functions.plot_profiles_removed_by_line(df=profiles_removed,
-                                                             build=build)
+            print("Generating control variability violin plots....")
+            for culture in cultures:
+                plotting_functions.make_control_violin_plot(df=mfi,
+                                                            build=build,
+                                                            culture=culture)
 
             print("Generating control barcode quantile plots....")
             for culture in cultures:
@@ -671,9 +658,8 @@ elif generate_report and build:
                                                        vmin=4)
 
             print(f"Generating COUNT heatmaps.....")
-            plotting_functions.make_build_count_heatmaps(df=mfi,
+            plotting_functions.make_build_count_heatmaps(df=cnt,
                                                          build=build)
-            
             plotting_functions.make_pert_type_heatmaps(df=mfi,
                                                        build=build,
                                                        metric='count',
@@ -713,24 +699,21 @@ elif generate_report and build:
 
             print(f"Generating plate heatmaps.....")
             for culture in cultures:
-                plotting_functions.plot_plate_heatmaps(mfi_out,
+                plotting_functions.plot_plate_heatmaps(mfi,
                                                        metric='logMFI',
                                                        build=build,
                                                        culture=culture)
-                plotting_functions.plot_plate_heatmaps(mfi_out,
+                plotting_functions.plot_plate_heatmaps(mfi,
                                                        metric='logMFI_norm',
                                                        build=build,
                                                        culture=culture)
-                plotting_functions.plot_plate_heatmaps(cnt,
+                plotting_functions.plot_plate_heatmaps(mfi,
                                                        metric='count',
                                                        by_type=False,
                                                        build=build,
-                                                       culture=culture)
-                plotting_functions.plot_plate_heatmaps(cnt,
-                                                       metric='count',
-                                                       by_type=False,
-                                                       build=build,
-                                                       culture=culture)
+                                                       culture=culture,
+                                                       vmax=35,
+                                                       vmin=0)
 
             print(f"Generating liver plots.....")
             try:
@@ -766,14 +749,19 @@ elif generate_report and build:
             if len(mfi.replicate.unique()) > 1:
                 if corrplot:
                     print(f"There are multiple replicates, generating correlation plots.....")
-                    plotting_functions.plot_corrplot(df=corr_df_norm,
-                                                     mfi=mfi,
-                                                     build=build,
-                                                     filename='corrplot_norm.png')
-                    plotting_functions.plot_corrplot(df=corr_df_raw,
-                                                     mfi=mfi,
-                                                     build=build,
-                                                     filename='corrplot_raw.png')
+                    for plate in mfi.pert_plate.unique():
+                        check_df = mfi[mfi.pert_plate == plate]
+                        for culture in check_df.culture.unique():
+                            plotting_functions.make_corrplots(df=mfi,
+                                                              pert_plate=plate,
+                                                              metric='logMFI_norm',
+                                                            build=build,
+                                                            culture=culture)
+                            plotting_functions.make_corrplots(df=mfi,
+                                                              pert_plate=plate,
+                                                            metric='logMFI_norm',
+                                                            build=build,
+                                                            culture=culture)
 
             print(f"Report generation is complete!")
 
