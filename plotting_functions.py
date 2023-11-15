@@ -233,55 +233,58 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
 
 def make_corrplots(df, pert_plate, build, culture='PR500', metric='logMFI_norm', bucket_name='cup.clue.io'):
     data = df[(df.pert_plate == pert_plate) & (df.culture == culture)]
-    pivoted_df = data.pivot_table(index=['pert_iname', 'pert_dose', 'pert_type'], 
-                                columns=['replicate'], 
-                                values=metric).reset_index()
+    pivoted_df = data.pivot_table(index=['pert_iname', 'pert_dose', 'pert_type','ccle_name'], 
+                                  columns=['replicate'], 
+                                  values=metric).reset_index()
 
     # Flatten the multi-level column index if necessary
     pivoted_df.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in pivoted_df.columns.values]
 
     # Get a list of all the unique 'replicate' values
-    replicates = [col for col in pivoted_df if col.startswith('X')]
+    replicates = sorted([col for col in pivoted_df if col.startswith('X')])
 
     # Create a figure with a grid of subplots
     fig, axes = plt.subplots(len(replicates), len(replicates), figsize=(7, 7))
-
-    # Set the title for the figure
+    
+    # Set a title for the figure
     fig.suptitle(pert_plate, fontsize=16)
 
     # Iterate over each subplot and fill in the appropriate plot
     for i, rep_i in enumerate(replicates):
         for j, rep_j in enumerate(replicates):
             ax = axes[i, j]
-            if i < j:  # Skip the upper triangle of the grid
-                ax.axis('off')  # Hide the axis
+            # Hide the axis for upper triangle plots
+            if i < j:
+                ax.axis('off')
                 continue
-            elif i == j:  # Diagonal: KDE plot
+            
+            if i == j:  # Diagonal: KDE plot
                 sns.kdeplot(data=pivoted_df, x=rep_i, ax=ax)
-                ax.set_ylabel('Density')
+                ax.set_xlabel('')  # Remove x-label
+                ax.set_ylabel('')  # Remove y-label
             else:  # Lower triangle: Scatter plot
                 sns.scatterplot(data=pivoted_df, x=rep_i, y=rep_j, ax=ax, s=3)
-
                 # Calculate and annotate Pearson correlation
                 clean_df = pivoted_df[[rep_i, rep_j]].dropna()
                 corr, _ = pearsonr(clean_df[rep_i], clean_df[rep_j])
                 ax.annotate(f'ρ = {corr:.2f}', xy=(0.05, 0.95), xycoords='axes fraction', ha='left', va='top', size=10)
-                if i == len(replicates) - 1:  # Only set xlabel for the last row
-                    ax.set_xlabel(rep_j)
-                if j == 0:  # Only set ylabel for the first column
-                    ax.set_ylabel(rep_i)
-
+            
             # Set x-axis labels only for the bottom row subplots
             if i == len(replicates) - 1:
-                ax.set_xlabel(rep_j)
+                ax.set_xlabel(rep_j.split('_')[-1])
+                ax.tick_params(labelbottom=True)  # Show x-axis ticks
             else:
-                ax.set_xticklabels([])
-
+                ax.set_xlabel('')
+                ax.tick_params(labelbottom=False)  # Hide x-axis ticks
+            
             # Set y-axis labels only for the first column subplots
             if j == 0:
-                ax.set_ylabel(rep_i)
+                ax.set_ylabel(rep_i.split('_')[-1])
+                ax.tick_params(labelleft=True)  # Show y-axis ticks
             else:
-                ax.set_yticklabels([])
+                ax.set_ylabel('')
+                ax.tick_params(labelleft=False)  # Hide y-axis ticks
+
 
     # Adjust layout to prevent overlap
     fig.tight_layout()

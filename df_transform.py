@@ -171,7 +171,7 @@ def construct_count_df(count, mfi):
     count['culture'] = count['cid'].str.split('_').str[1]
     count.loc[count.culture == 'PR300P', 'culture'] = 'PR300'
     count['rid'] = count['rid'] + '_' + count['culture']
-    res = count.merge(mfi[['profile_id', 'rid', 'prism_replicate', 'pool_id', 'pert_well', 'pert_plate', 'replicate']],
+    res = count.merge(mfi[['profile_id', 'rid', 'prism_replicate', 'pool_id', 'pert_well', 'pert_plate', 'replicate','pert_type', 'ccle_name']],
                       left_on=['rid', 'cid'],
                       right_on=['rid', 'profile_id'], how='left').dropna()
     res.rename(columns={'value': 'count'}, inplace=True)

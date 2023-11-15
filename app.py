@@ -241,6 +241,7 @@ if view_report and build:
         cultures = build_metadata['culture']
         plates = build_metadata['plates']
         pert_plates = build_metadata['pert_plates']
+        pert_plates = [plate for plate in pert_plates if 'BASE' not in plate] # remove BASE plates
 
         # Get plate metadata
         plate_metadata = read_json_from_s3(bucket_name=bucket,
@@ -299,7 +300,7 @@ if view_report and build:
                 for label, tab in zip(tab_labels, tabs):
                     with tab:
                         filename = f"count_{label}_pert_type_heatmap.png"
-                        load_image_from_s3(filename, prefix=build)
+                        load_image_from_s3(filename=filename, prefix=build)
                 st.subheader('Count by plate')
                 st.markdown(descriptions.build_heatmap_count)
                 tab_labels = cultures
@@ -516,6 +517,7 @@ elif generate_report and build:
             cultures = list(mfi.culture.unique())
             plates = list(mfi.prism_replicate.unique())
             pert_plates = list(mfi.pert_plate.unique())
+
             json_data = {'culture': cultures,
                          'plates': plates,
                          'pert_plates': pert_plates}
@@ -673,7 +675,7 @@ elif generate_report and build:
             print(f"Generating COUNT heatmaps.....")
             plotting_functions.make_build_count_heatmaps(df=cnt,
                                                          build=build)
-            plotting_functions.make_pert_type_heatmaps(df=mfi,
+            plotting_functions.make_pert_type_heatmaps(df=cnt,
                                                        build=build,
                                                        metric='count',
                                                        vmax=30,
@@ -720,7 +722,7 @@ elif generate_report and build:
                                                        metric='logMFI_norm',
                                                        build=build,
                                                        culture=culture)
-                plotting_functions.plot_plate_heatmaps(mfi,
+                plotting_functions.plot_plate_heatmaps(cnt,
                                                        metric='count',
                                                        by_type=False,
                                                        build=build,
@@ -762,7 +764,7 @@ elif generate_report and build:
             if len(mfi.replicate.unique()) > 1:
                 if corrplot:
                     print(f"There are multiple replicates, generating correlation plots.....")
-                    for plate in mfi.pert_plate.unique():
+                    for plate in mfi[~mfi.pert_plate.str.contains('BASE')].pert_plate.unique():
                         check_df = mfi[mfi.pert_plate == plate]
                         for culture in check_df.culture.unique():
                             plotting_functions.make_corrplots(df=mfi,
