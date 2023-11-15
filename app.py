@@ -338,6 +338,19 @@ if view_report and build:
                         filename = f"{label}_ctl_violin.png"
                         load_image_from_s3(filename=filename, prefix=build)
 
+                # control barcode ranks
+                st.header('Control barcode ranks')
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        heatmap_filename = f"{label}_ctlbc_rank_heatmap.png"
+                        violin_filename = f"{label}_ctlbc_rank_violin.png"
+                        st.subheader(f"By well")
+                        load_image_from_s3(filename=heatmap_filename, prefix=build)
+                        st.subheader(f"By plate")
+                        load_image_from_s3(filename=violin_filename, prefix=build)
+
             with st.expander('Data removed'):
                 st.header('Instances removed')
 
@@ -762,6 +775,18 @@ elif generate_report and build:
                                                             metric='logMFI_norm',
                                                             build=build,
                                                             culture=culture)
+            # Rank control barcodes in each well
+            print("Generating ctlbc rank heatmaps....")
+            ctls = ['prism invariant ' + str(i) for i in range(1,11)]
+            data = mfi[mfi.ccle_name.isin(ctls)] 
+            ranked_ctls = data.groupby(['prism_replicate', 'pert_plate', 'pert_well','culture']).apply(df_transform.calculate_ranks)
+            
+            for culture in ranked_ctls.culture.unique():
+                plotting_functions.make_ctlbc_rank_heatmaps(df=ranked_ctls, build=build, culture=culture)
+
+            print("Generating ctlbc rank violin plots....")
+            for culture in ranked_ctls.culture.unique():
+                plotting_functions.make_ctlbc_rank_violin(df=ranked_ctls, build=build, culture=culture)
 
             print(f"Report generation is complete!")
 

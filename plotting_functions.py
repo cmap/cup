@@ -666,3 +666,79 @@ def make_control_violin_plot(df, build, culture):
     s3 = boto3.client('s3')
     object_key = f"{build}/{culture}_ctl_violin.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+# Control barcode rank heatmaps
+def make_ctlbc_rank_heatmaps(df, build, culture):
+    # Subset data and add row/col
+    plot_data = df[~df.prism_replicate.str.contains('BASE')]
+    plot_data['row'] = plot_data['pert_well'].str[0]
+    plot_data['col'] = plot_data['pert_well'].str[1:3]
+    plot_data['row'] = plot_data['row'].astype('category')
+    plot_data['col'] = plot_data['col'].astype('category')
+    plot_data['row'] = pd.Categorical(plot_data['row'], categories=reversed(plot_data['row'].cat.categories), ordered=True)
+    plot_data['analyte_num'] = plot_data['ccle_name'].str.split(' ').str[2].astype('int')
+    plot_data['plate'] = plot_data['pert_plate'] + '_' + plot_data['replicate']
+
+    # calculate figure size
+    n_plates = plot_data.prism_replicate.unique().shape[0]
+    fig_width = 12
+    fig_height = n_plates 
+
+    plot_data.sort_values('analyte_num', inplace=True)
+    p = (
+        ggplot(plot_data, aes(x='col', y='row', fill='rank')) +
+        geom_tile() +
+        facet_grid('plate ~ analyte_num') +
+        theme(
+            figure_size=(fig_width,fig_height),
+            strip_text_x=element_text(size=10),
+            strip_text_y=element_text(size=7),
+            axis_text=element_blank(),
+            axis_ticks_major=element_blank()
+        ) +
+        xlab('') +
+        ylab('')
+    )
+
+    # Save plot to a BytesIO object as PNG
+    img_data = io.BytesIO()
+    p.save(img_data, format='png', width=fig_width, height=fig_height, dpi=200)
+    img_data.seek(0)
+
+    # Upload to S3
+    s3 = boto3.client('s3')
+    object_key = f"{build}/{culture}_ctlbc_rank_heatmap.png"
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+def make_ctlbc_rank_violin(df, build, culture):
+    # Subset data and add row/col
+    plot_data = df[(~df.prism_replicate.str.contains('BASE'))&(df.culture==culture)]
+    plot_data['analyte_num'] = plot_data['ccle_name'].str.split(' ').str[2].astype('int')
+    plot_data['analyte_num'] = pd.Categorical(plot_data['analyte_num'])
+    plot_data['plate'] = plot_data['pert_plate'] + '_' + plot_data['replicate']
+
+    # calculate figure size
+    n_cols = plot_data.replicate.unique().shape[0]
+    n_rows = plot_data.pert_plate.unique().shape[0]
+    fig_width = n_cols * 4
+    fig_height = n_rows * 4 
+
+    plot_data.sort_values('analyte_num', inplace=True)
+    p = (
+        ggplot(plot_data, aes(x='analyte_num', y='rank')) +
+        geom_violin() +
+        facet_grid('pert_plate ~ replicate') +
+        xlab('Analyte') +
+        ylab('Rank') +
+        theme(figure_size=(fig_width, fig_height))
+    )
+    
+    # Save plot to a BytesIO object as PNG
+    img_data = io.BytesIO()
+    p.save(img_data, format='png', dpi=150)
+    img_data.seek(0)
+
+    # Upload to S3
+    s3 = boto3.client('s3')
+    object_key = f"{build}/{culture}_ctlbc_rank_violin.png"
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)

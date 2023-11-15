@@ -224,3 +224,8 @@ def profiles_removed(df):
     replicates_by_compound = df[~df.ccle_name.str.contains('invariant')].groupby(['culture','pert_plate','ccle_name','pert_iname','pert_dose']).size().reset_index(name='n_profiles')
     res = replicates_by_compound[replicates_by_compound.n_profiles < 2].drop(columns=['n_profiles'])
     return res
+
+# Define a function to calculate analyte ranks within each group
+def calculate_ranks(group):
+    group['rank'] = group['logMFI'].rank(method='first')
+    return group
