@@ -15,6 +15,8 @@ import plotly.io as pio
 from matplotlib.colors import ListedColormap
 import df_transform
 import math
+from plotnine import *
+from scipy.stats import pearsonr
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
@@ -229,64 +231,63 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
 
 # REPLICATE CORRELATION
 
+def make_corrplots(df, pert_plate, build, culture='PR500', metric='logMFI_norm', bucket_name='cup.clue.io'):
+    data = df[(df.pert_plate == pert_plate) & (df.culture == culture)]
+    pivoted_df = data.pivot_table(index=['pert_iname', 'pert_dose', 'pert_type','ccle_name'], 
+                                  columns=['replicate'], 
+                                  values=metric).reset_index()
 
-def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
-    df = df.sort_values('pert_plate')
-    pert_plates = df['pert_plate'].unique()
-    num_pert_plates = len(pert_plates)
+    # Flatten the multi-level column index if necessary
+    pivoted_df.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in pivoted_df.columns.values]
 
-    cols = list(mfi[~mfi.pert_plate.str.contains('BASE')].replicate.unique())
-    num_cols = len(cols)
+    # Get a list of all the unique 'replicate' values
+    replicates = sorted([col for col in pivoted_df if col.startswith('X')])
 
-    max_cols_per_row = 3
-    num_rows = (num_pert_plates + max_cols_per_row - 1) // max_cols_per_row
+    # Create a figure with a grid of subplots
+    fig, axes = plt.subplots(len(replicates), len(replicates), figsize=(7, 7))
+    
+    # Set a title for the figure
+    fig.suptitle(pert_plate, fontsize=16)
 
-    fig, axes = plt.subplots(nrows=num_cols * num_rows, ncols=num_cols * max_cols_per_row,
-                             figsize=(10 * max_cols_per_row, 10 * num_rows), sharex='col', sharey='row')
+    # Iterate over each subplot and fill in the appropriate plot
+    for i, rep_i in enumerate(replicates):
+        for j, rep_j in enumerate(replicates):
+            ax = axes[i, j]
+            # Hide the axis for upper triangle plots
+            if i < j:
+                ax.axis('off')
+                continue
+            
+            if i == j:  # Diagonal: KDE plot
+                sns.kdeplot(data=pivoted_df, x=rep_i, ax=ax)
+                ax.set_xlabel('')  # Remove x-label
+                ax.set_ylabel('')  # Remove y-label
+            else:  # Lower triangle: Scatter plot
+                sns.scatterplot(data=pivoted_df, x=rep_i, y=rep_j, ax=ax, s=3)
+                # Calculate and annotate Pearson correlation
+                clean_df = pivoted_df[[rep_i, rep_j]].dropna()
+                corr, _ = pearsonr(clean_df[rep_i], clean_df[rep_j])
+                ax.annotate(f'ρ = {corr:.2f}', xy=(0.05, 0.95), xycoords='axes fraction', ha='left', va='top', size=10)
+            
+            # Set x-axis labels only for the bottom row subplots
+            if i == len(replicates) - 1:
+                ax.set_xlabel(rep_j.split('_')[-1])
+                ax.tick_params(labelbottom=True)  # Show x-axis ticks
+            else:
+                ax.set_xlabel('')
+                ax.tick_params(labelbottom=False)  # Hide x-axis ticks
+            
+            # Set y-axis labels only for the first column subplots
+            if j == 0:
+                ax.set_ylabel(rep_i.split('_')[-1])
+                ax.tick_params(labelleft=True)  # Show y-axis ticks
+            else:
+                ax.set_ylabel('')
+                ax.tick_params(labelleft=False)  # Hide y-axis ticks
 
-    for idx, pert_plate in enumerate(pert_plates):
-        # Calculate row and col index for the current pert_plate
-        row_idx = idx // max_cols_per_row
-        col_idx = idx % max_cols_per_row
 
-        # Filter dataframe by pert_plate
-        df_filtered = df[df['pert_plate'] == pert_plate]
-
-        for i in range(num_cols):
-            for j in range(num_cols):
-                ax = axes[row_idx * num_cols + i, col_idx * num_cols + j]
-
-                # Calculate the correlation coefficient for the x and y variables
-                corr_coef = np.corrcoef(df_filtered[cols[j]], df_filtered[cols[i]])[0, 1]
-
-                # Create scatter plot
-                ax.scatter(df_filtered[cols[j]], df_filtered[cols[i]], alpha=0.5)
-
-                # Add diagonal line
-                min_val = min(ax.get_xlim()[0], ax.get_ylim()[0])
-                max_val = max(ax.get_xlim()[1], ax.get_ylim()[1])
-                ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=1)
-
-                # Set axis labels
-                if i == num_cols - 1:
-                    ax.set_xlabel(cols[j])
-                if j == 0:
-                    ax.set_ylabel(cols[i])
-
-                # Add the correlation coefficient to the subplot title
-                if i != j:
-                    ax.set_title(f'{corr_coef:.2f}', x=0.2, y=0.75, fontweight='bold', size=25)
-
-        # Label each grid with the pert_plate it contains
-        axes[row_idx * num_cols, col_idx * num_cols].set_title(
-            f'{pert_plate}\n' + axes[row_idx * num_cols, col_idx * num_cols].get_title(), x=1.7, fontweight='bold',
-            size=20)
-
-    # Adjust the spacing between subplots
-    plt.subplots_adjust(wspace=5, hspace=5)
-
-    # Set tight layout
-    plt.tight_layout()
+    # Adjust layout to prevent overlap
+    fig.tight_layout()
 
     # Save plot as PNG to buffer
     buffer = io.BytesIO()
@@ -295,10 +296,11 @@ def plot_corrplot(df, mfi, filename, build, bucket_name='cup.clue.io'):
 
     # Upload as PNG to S3
     s3 = boto3.client('s3')
+    filename = f"{pert_plate}:{culture}_corrplot.png"
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
 
 
-def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
+def plot_plate_heatmaps(df, metric, build, culture, vmax=4, vmin=16, by_type=True):
     metric = metric
     df['row'] = df['pert_well'].str[0]
     df['col'] = df['pert_well'].str[1:3]
@@ -341,7 +343,7 @@ def plot_plate_heatmaps(df, metric, build, culture, by_type=True):
         if metric == 'count':
             sns.heatmap(heatmap_data, cmap="Reds_r", ax=ax, vmin=0, vmax=30)
         else:
-            sns.heatmap(heatmap_data, cmap="Reds_r", ax=ax, vmin=7, vmax=16)
+            sns.heatmap(heatmap_data, cmap="Reds_r", ax=ax, vmin=4, vmax=16)
         ax.set_title(f"{plate} | {replicate}")
         ax.set_xlabel('')
         ax.set_ylabel('')
@@ -510,78 +512,6 @@ def make_build_count_heatmaps(df, build, metric='count'):
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
-def make_pert_type_heatmaps_by_plate(df, build, culture, metric='logMFI'):
-    data = df[(df.culture == culture) & (~df.ccle_name.str.contains('prism')) & (
-        df.pert_type.isin(['trt_poscon', 'ctl_vehicle']))] \
-        [[metric, 'prism_replicate', 'ccle_name', 'pool_id', 'profile_id', 'pert_type']].sort_values(
-        ['pert_type', 'pool_id']).dropna(subset=[metric])
-    data['ccle_pool'] = data.ccle_name + ' ' + data.pool_id
-
-    plates = data.prism_replicate.unique()
-
-    for plate in plates:
-        plate_data = data[data.prism_replicate == plate]
-        # Create pivot table
-        pivot_table = plate_data.pivot_table(
-            values=metric,
-            index=['pool_id'],
-            columns=['pert_type', 'profile_id'],
-            aggfunc='median')
-
-        # Create a colormap for pool_id
-        unique_pool_ids = pivot_table.index.unique()
-        colors = plt.cm.tab20(np.linspace(0, 1, len(unique_pool_ids)))  # use any other colormap if you wish
-        color_dict = dict(zip(unique_pool_ids, range(len(unique_pool_ids))))
-
-        # Map pool_ids to integer values
-        color_column = pd.DataFrame([color_dict[pool_id] for pool_id in pivot_table.index],
-                                    index=pivot_table.index,
-                                    columns=['color'])
-
-        # Create a colormap from unique integers to colors
-        colormap = ListedColormap(colors)
-
-        # Create the subplots
-        fig, (ax1, ax2) = plt.subplots(ncols=2, gridspec_kw={'width_ratios': [0.5, 20]}, figsize=(12, 6))
-
-        # Plot the color bar as a heatmap with pool_id as yticklabels
-        sns.heatmap(color_column, ax=ax1, cmap=colormap, cbar=False, yticklabels=True, xticklabels=[])
-
-        # Rotate yticklabels for better visibility
-        ax1.yaxis.tick_left()  # Move ticks to the right side of color bar
-        for label in ax1.get_yticklabels():
-            label.set_rotation(0)
-
-        # Plot the main heatmap
-        sns.heatmap(pivot_table, ax=ax2, xticklabels=[], yticklabels=False)
-
-        # Remove the space between the plots
-        plt.subplots_adjust(wspace=0.01)
-
-        # Set the title
-        plt.title(plate, y=1.05)
-
-        # Remove appropriate labels
-        ax2.set_ylabel('')
-        ax1.set_ylabel('')
-        ax2.set_xlabel('')
-
-        ax2.annotate("ctl_vehicle", xy=(0.2, 1.01), annotation_clip=False, xycoords='axes fraction',
-                     textcoords='offset points', xytext=(5, 5))
-        ax2.annotate("trt_poscon", xy=(0.69, 1.01), annotation_clip=False, xycoords='axes fraction',
-                     textcoords='offset points', xytext=(5, 5))
-
-        # Save the plot to a BytesIO object
-        img_data = io.BytesIO()
-        plt.savefig(img_data, format='png')
-        img_data.seek(0)  # Rewind the file pointer to the beginning
-
-        object_key = f"{build}/{plate}_{culture}_pert_type_heatmap.png"  # The desired S3 object key (file name)
-
-        s3 = boto3.client('s3')
-        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
-
-
 def generate_cbc_quantile_plot(df, build, culture):
     # Filter and get unique values
     unique_values = df.prism_replicate[(~df.prism_replicate.str.contains('BASE')) & (df.culture == culture)].unique()
@@ -641,86 +571,6 @@ def generate_cbc_quantile_plot(df, build, culture):
 
     s3 = boto3.client('s3')
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
-
-
-def plot_instances_removed_by_compound(df, build, filename='plt_rm_instances_by_cp.json', bucket_name='cup.clue.io'):
-    data = df.groupby(['culture', 'prism_replicate', 'pert_iname']).size().reset_index(name='instances_removed')
-    fig = px.ecdf(data,
-                  x='instances_removed',
-                  color='prism_replicate',
-                  facet_col='culture',
-                  template='plotly_white',
-                  title='Instances removed by compound for each plate')
-    fig.update_layout(yaxis_title="Fraction compounds")
-    # Modify facet titles
-    for annotation in fig.layout.annotations:
-        if "culture=" in annotation.text:
-            annotation.text = annotation.text.split('=')[-1]
-
-    # Upload as json to s3
-    s3 = boto3.client('s3')
-    fig_json = fig.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
-
-
-def plot_instances_removed_by_line(df, build, filename='plt_rm_instances_by_line.json', bucket_name='cup.clue.io'):
-    data = df.groupby(['culture', 'prism_replicate', 'ccle_name']).size().reset_index(name='instances_removed')
-    fig = px.ecdf(data,
-                  x='instances_removed',
-                  color='prism_replicate',
-                  facet_col='culture',
-                  template='plotly_white',
-                  title='Instances removed by cell line for each plate')
-    fig.update_layout(yaxis_title="Fraction cell lines")
-    # Modify facet titles
-    for annotation in fig.layout.annotations:
-        if "culture=" in annotation.text:
-            annotation.text = annotation.text.split('=')[-1]
-
-    # Upload as json to s3
-    s3 = boto3.client('s3')
-    fig_json = fig.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
-
-
-def plot_profiles_removed_by_line(df, build, filename='plt_rm_profiles_by_line.json', bucket_name='cup.clue.io'):
-    data = df.groupby(['culture', 'pert_plate', 'ccle_name']).size().reset_index(name='profiles_removed')
-    fig = px.ecdf(data,
-                  x='profiles_removed',
-                  color='pert_plate',
-                  facet_col='culture',
-                  template='plotly_white',
-                  title='Profiles removed by cell line for each plate')
-    fig.update_layout(yaxis_title="Fraction cell lines")
-    # Modify facet titles
-    for annotation in fig.layout.annotations:
-        if "culture=" in annotation.text:
-            annotation.text = annotation.text.split('=')[-1]
-
-    # Upload as json to s3
-    s3 = boto3.client('s3')
-    fig_json = fig.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
-
-
-def plot_profiles_removed_by_compound(df, build, filename='plt_rm_profiles_by_cp.json', bucket_name='cup.clue.io'):
-    data = df.groupby(['culture', 'pert_plate', 'pert_iname']).size().reset_index(name='profiles_removed')
-    fig = px.ecdf(data,
-                  x='profiles_removed',
-                  color='pert_plate',
-                  facet_col='culture',
-                  template='plotly_white',
-                  title='Instances removed by compound for each plate')
-    fig.update_layout(yaxis_title="Fraction compounds")
-    # Modify facet titles
-    for annotation in fig.layout.annotations:
-        if "culture=" in annotation.text:
-            annotation.text = annotation.text.split('=')[-1]
-
-    # Upload as json to s3
-    s3 = boto3.client('s3')
-    fig_json = fig.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
 
 def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
@@ -783,3 +633,115 @@ def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
 
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+def make_control_violin_plot(df, build, culture):
+    # Subset data
+    data = df[(df.pert_type == 'ctl_vehicle') & (df.ccle_name.str.contains('prism')) & (df.culture==culture)]
+    data['analyte_num'] = data['ccle_name'].str.split(' ').str[2].astype('int')
+    data['analyte_num'] = pd.Categorical(data['analyte_num'])
+    data.sort_values('analyte_num')
+
+    # Determine the number of unique values for facets
+    n_cols = len(data['replicate'].unique())
+    n_rows = len(data['pert_plate'].unique())
+
+    # Set figure dimensions based on the number of facets
+    fig_width = 3 * n_cols  # Adjust multiplier as needed for width
+    fig_height = 3 * n_rows  # Adjust multiplier as needed for height
+
+
+    # Create plot
+    g = (
+        ggplot(data, aes(x='analyte_num', y='logMFI')) +
+        geom_violin() +
+        xlab('') +
+        ylab('logMFI') +
+        facet_grid('pert_plate ~ replicate') +
+        theme(figure_size=(fig_width, fig_height))
+    )
+
+    # Save plot to a BytesIO object as PNG
+    img_data = io.BytesIO()
+    g.save(img_data, format='png', width=fig_width, height=fig_height, dpi=100)
+    img_data.seek(0)
+
+    # Upload to S3
+    s3 = boto3.client('s3')
+    object_key = f"{build}/{culture}_ctl_violin.png"
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+# Control barcode rank heatmaps
+def make_ctlbc_rank_heatmaps(df, build, culture):
+    # Subset data and add row/col
+    plot_data = df[~df.prism_replicate.str.contains('BASE')]
+    plot_data['row'] = plot_data['pert_well'].str[0]
+    plot_data['col'] = plot_data['pert_well'].str[1:3]
+    plot_data['row'] = plot_data['row'].astype('category')
+    plot_data['col'] = plot_data['col'].astype('category')
+    plot_data['row'] = pd.Categorical(plot_data['row'], categories=reversed(plot_data['row'].cat.categories), ordered=True)
+    plot_data['analyte_num'] = plot_data['ccle_name'].str.split(' ').str[2].astype('int')
+    plot_data['plate'] = plot_data['pert_plate'] + '_' + plot_data['replicate']
+
+    # calculate figure size
+    n_plates = plot_data.prism_replicate.unique().shape[0]
+    fig_width = 12
+    fig_height = n_plates 
+
+    plot_data.sort_values('analyte_num', inplace=True)
+    p = (
+        ggplot(plot_data, aes(x='col', y='row', fill='rank')) +
+        geom_tile() +
+        facet_grid('plate ~ analyte_num') +
+        theme(
+            figure_size=(fig_width,fig_height),
+            strip_text_x=element_text(size=10),
+            strip_text_y=element_text(size=7),
+            axis_text=element_blank(),
+            axis_ticks_major=element_blank()
+        ) +
+        xlab('') +
+        ylab('')
+    )
+
+    # Save plot to a BytesIO object as PNG
+    img_data = io.BytesIO()
+    p.save(img_data, format='png', width=fig_width, height=fig_height, dpi=200)
+    img_data.seek(0)
+
+    # Upload to S3
+    s3 = boto3.client('s3')
+    object_key = f"{build}/{culture}_ctlbc_rank_heatmap.png"
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+def make_ctlbc_rank_violin(df, build, culture):
+    # Subset data and add row/col
+    plot_data = df[(~df.prism_replicate.str.contains('BASE'))&(df.culture==culture)]
+    plot_data['analyte_num'] = plot_data['ccle_name'].str.split(' ').str[2].astype('int')
+    plot_data['analyte_num'] = pd.Categorical(plot_data['analyte_num'])
+    plot_data['plate'] = plot_data['pert_plate'] + '_' + plot_data['replicate']
+
+    # calculate figure size
+    n_cols = plot_data.replicate.unique().shape[0]
+    n_rows = plot_data.pert_plate.unique().shape[0]
+    fig_width = n_cols * 4
+    fig_height = n_rows * 4 
+
+    plot_data.sort_values('analyte_num', inplace=True)
+    p = (
+        ggplot(plot_data, aes(x='analyte_num', y='rank')) +
+        geom_violin() +
+        facet_grid('pert_plate ~ replicate') +
+        xlab('Analyte') +
+        ylab('Rank') +
+        theme(figure_size=(fig_width, fig_height))
+    )
+    
+    # Save plot to a BytesIO object as PNG
+    img_data = io.BytesIO()
+    p.save(img_data, format='png', dpi=150)
+    img_data.seek(0)
+
+    # Upload to S3
+    s3 = boto3.client('s3')
+    object_key = f"{build}/{culture}_ctlbc_rank_violin.png"
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
