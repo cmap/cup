@@ -332,6 +332,7 @@ if view_report and build:
 
                 # control barcode variability
                 st.header('Control barcode variability')
+                st.markdown(descriptions.ctlbc_violin)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
                 for label, tab in zip(tab_labels, tabs):
@@ -341,6 +342,7 @@ if view_report and build:
 
                 # control barcode ranks
                 st.header('Control barcode ranks')
+                st.markdown(descriptions.ctlbc_ranks)
                 tab_labels = cultures
                 tabs = st.tabs(tab_labels)
                 for label, tab in zip(tab_labels, tabs):
