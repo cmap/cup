@@ -2,6 +2,7 @@
 import boto3
 import pandas as pd
 import numpy as np
+from scipy.stats import spearmanr
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
@@ -225,7 +226,50 @@ def profiles_removed(df):
     res = replicates_by_compound[replicates_by_compound.n_profiles < 2].drop(columns=['n_profiles'])
     return res
 
-# Define a function to calculate analyte ranks within each group
+# Calculate analyte ranks within each group
 def calculate_ranks(group):
     group['rank'] = group['logMFI'].rank(method='first')
     return group
+
+# Compute pairwise correlations of CTLBC ranks for each plate
+def calculate_avg_spearman_correlation(df):
+    # Remove any BASE plates
+    data=df[~df.prism_replicate.str.contains('BASE')]
+    # Calculate the ranks outside of the loop for all data
+    data['rank'] = data.groupby(['prism_replicate', 'pert_well'])['logMFI'].rank(method='min', ascending=False)
+
+    # Create a dictionary to hold the correlation values
+    correlations = {}
+
+    # Iterate through each replicate
+    for replicate in data['prism_replicate'].unique():
+        print(f"Computing pairwise CTLBC rank correlations for {replicate}")
+        replicate_data = data[data['prism_replicate'] == replicate]
+        wells = replicate_data['pert_well'].unique()
+
+        # Prepare a list to store the Spearman correlation coefficients for this replicate
+        replicate_correlations = []
+
+        # Calculate Spearman correlation for each pair of wells
+        for i in range(len(wells) - 1):
+            for j in range(i + 1, len(wells)):
+                # Get the ranks for each pair of wells
+                ranks_i = replicate_data[replicate_data['pert_well'] == wells[i]].sort_values('ccle_name')['rank']
+                ranks_j = replicate_data[replicate_data['pert_well'] == wells[j]].sort_values('ccle_name')['rank']
+
+                # Check if there are a matching number of ranks
+                if len(ranks_i) == len(ranks_j):
+                    # Calculate Spearman correlation
+                    rho, _ = spearmanr(ranks_i, ranks_j)
+                    replicate_correlations.append(rho)
+
+        # Compute the average correlation for the replicate
+        if replicate_correlations:
+            avg_corr = np.mean(replicate_correlations)
+        else:
+            avg_corr = np.nan
+
+        # Store the average correlation in the dictionary
+        correlations[replicate] = avg_corr
+
+    return correlations

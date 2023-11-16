@@ -779,18 +779,22 @@ elif generate_report and build:
                                                             metric='logMFI_norm',
                                                             build=build,
                                                             culture=culture)
-            # Rank control barcodes in each well
-            print("Generating ctlbc rank heatmaps....")
+            # Rank control barcodes in each plate
             ctls = ['prism invariant ' + str(i) for i in range(1,11)]
             data = mfi[mfi.ccle_name.isin(ctls)] 
+
+            # Compute pairwise correlations of CTLBCs in each plate
             ranked_ctls = data.groupby(['prism_replicate', 'pert_plate', 'pert_well','culture']).apply(df_transform.calculate_ranks)
-            
+            ctl_pairwise_corr = df_transform.calculate_avg_spearman_correlation(ranked_ctls)
+
+            # Generate rank plots
+            print(f"Generating CTLBC rank heatmaps.... ")
             for culture in ranked_ctls.culture.unique():
                 plotting_functions.make_ctlbc_rank_heatmaps(df=ranked_ctls, build=build, culture=culture)
 
-            print("Generating ctlbc rank violin plots....")
+            print("Generating CTLBC rank violin plots....")
             for culture in ranked_ctls.culture.unique():
-                plotting_functions.make_ctlbc_rank_violin(df=ranked_ctls, build=build, culture=culture)
+                plotting_functions.make_ctlbc_rank_violin(df=ranked_ctls, build=build, culture=culture, corrs=ctl_pairwise_corr)
 
             print(f"Report generation is complete!")
 
