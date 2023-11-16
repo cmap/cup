@@ -684,7 +684,7 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
     # calculate figure size
     n_plates = plot_data.prism_replicate.unique().shape[0]
     fig_width = 12
-    fig_height = n_plates 
+    fig_height = n_plates
 
     plot_data.sort_values('analyte_num', inplace=True)
     p = (
@@ -693,10 +693,11 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
         facet_grid('plate ~ analyte_num') +
         theme(
             figure_size=(fig_width,fig_height),
-            strip_text_x=element_text(size=10),
+            strip_text_x=element_text(size=7),
             strip_text_y=element_text(size=7),
             axis_text=element_blank(),
-            axis_ticks_major=element_blank()
+            axis_ticks_major=element_blank(),
+            plot_margin=1
         ) +
         xlab('') +
         ylab('')
@@ -733,7 +734,7 @@ def make_ctlbc_rank_violin(df, build, culture, corrs):
     p = (
         ggplot(plot_data, aes(x='analyte_num', y='rank')) +
         geom_violin() +
-        geom_text(aes(label='correlation'), data=plot_data.drop_duplicates('prism_replicate'), x=2, y=9.7, size=15) +
+        geom_text(aes(label='correlation'), data=plot_data.drop_duplicates('prism_replicate'), x=2, y=9.7, size=15, color='blue') +
         facet_grid('pert_plate ~ replicate') +
         scale_y_continuous(breaks=range(1, 11)) +
         xlab('Analyte') +

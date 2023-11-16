@@ -63,7 +63,8 @@ plate_dists = 'Simple distributions of logMFI values for vehicle controls and po
 dr_vs_er = 'Dynamic range versus error rate for each cell line on each detection plate.'
 
 corr = 'Correlation of normalized logMFI values across replicates. These correlations are calculated on a per compound/dose ' \
-       'level across each cell line. This means that each point on this plot represents a given compound/dose in a given cell line.'
+       'level across each cell line. This means that each point on this plot represents a given compound/dose in a given cell line.' \
+       'Note: replicate sets with only a single replicate will not be included here.'
 
 profiles_removed = 'Profiles refer to replicate collapsed level 5 data. If a profile is removed,' \
                    'it means that we have no data available for a particular compound & dose combination. This occurs' \
@@ -83,4 +84,5 @@ ctlbc_violin = 'Raw logMFI values for each control barcode for each plate. This 
 ctlbc_ranks = 'Ranks are calculated for each control barcode in each well. Ideally, BC1 will always rank 1 and ' \
               'BC2 will always rank 2 etc. The violin plots show distribution of ranks for each barcode within ' \
               'each detection plate. Instances of barcode swapping can be seen as multi-modality here where different ' \
-              'barcodes overlap.'
+              'barcodes overlap. The coefficient given in the violin plots is the average of the pairwise spearman correlations '\
+              'of ranks on each plate.'
