@@ -649,7 +649,6 @@ def make_control_violin_plot(df, build, culture):
     fig_width = 3 * n_cols  # Adjust multiplier as needed for width
     fig_height = 3 * n_rows  # Adjust multiplier as needed for height
 
-
     # Create plot
     g = (
         ggplot(data, aes(x='analyte_num', y='logMFI')) +
@@ -685,7 +684,7 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
     # calculate figure size
     n_plates = plot_data.prism_replicate.unique().shape[0]
     fig_width = 12
-    fig_height = n_plates 
+    fig_height = n_plates
 
     plot_data.sort_values('analyte_num', inplace=True)
     p = (
@@ -694,10 +693,11 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
         facet_grid('plate ~ analyte_num') +
         theme(
             figure_size=(fig_width,fig_height),
-            strip_text_x=element_text(size=10),
+            strip_text_x=element_text(size=7),
             strip_text_y=element_text(size=7),
             axis_text=element_blank(),
-            axis_ticks_major=element_blank()
+            axis_ticks_major=element_blank(),
+            plot_margin=1
         ) +
         xlab('') +
         ylab('')
@@ -713,12 +713,16 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
     object_key = f"{build}/{culture}_ctlbc_rank_heatmap.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
-def make_ctlbc_rank_violin(df, build, culture):
+def make_ctlbc_rank_violin(df, build, culture, corrs):
     # Subset data and add row/col
     plot_data = df[(~df.prism_replicate.str.contains('BASE'))&(df.culture==culture)]
     plot_data['analyte_num'] = plot_data['ccle_name'].str.split(' ').str[2].astype('int')
     plot_data['analyte_num'] = pd.Categorical(plot_data['analyte_num'])
     plot_data['plate'] = plot_data['pert_plate'] + '_' + plot_data['replicate']
+
+    # Add pairwise correlation values
+    plot_data['correlation'] = plot_data['prism_replicate'].map(corrs)
+    plot_data['correlation'] = plot_data['correlation'].map("ρ={:.2f}".format)
 
     # calculate figure size
     n_cols = plot_data.replicate.unique().shape[0]
@@ -730,7 +734,9 @@ def make_ctlbc_rank_violin(df, build, culture):
     p = (
         ggplot(plot_data, aes(x='analyte_num', y='rank')) +
         geom_violin() +
+        geom_text(aes(label='correlation'), data=plot_data.drop_duplicates('prism_replicate'), x=2, y=9.7, size=15, color='blue') +
         facet_grid('pert_plate ~ replicate') +
+        scale_y_continuous(breaks=range(1, 11)) +
         xlab('Analyte') +
         ylab('Rank') +
         theme(figure_size=(fig_width, fig_height))

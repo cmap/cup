@@ -81,8 +81,6 @@ build = st.selectbox(
 st.experimental_set_query_params(option=build)
 view_report = st.button('View Report')
 generate_report = st.button('Generate Report')
-corrplot = st.checkbox('Create correlation plots', value=True)
-st.text('Note: You may only generate correlation plots if each pert_plate has > 1 replicate.')
 
 
 def get_file(files, file_string):
@@ -764,33 +762,36 @@ elif generate_report and build:
             df_transform.generate_pass_fail_tbl(mfi, qc, prefix=build)
 
             if len(mfi.replicate.unique()) > 1:
-                if corrplot:
-                    print(f"There are multiple replicates, generating correlation plots.....")
-                    for plate in mfi[~mfi.pert_plate.str.contains('BASE')].pert_plate.unique():
-                        check_df = mfi[mfi.pert_plate == plate]
-                        for culture in check_df.culture.unique():
-                            plotting_functions.make_corrplots(df=mfi,
-                                                              pert_plate=plate,
-                                                              metric='logMFI_norm',
-                                                            build=build,
-                                                            culture=culture)
-                            plotting_functions.make_corrplots(df=mfi,
-                                                              pert_plate=plate,
+                print(f"There are multiple replicates, generating correlation plots.....")
+                for plate in mfi[~mfi.pert_plate.str.contains('BASE')].pert_plate.unique():
+                    check_df = mfi[mfi.pert_plate == plate]
+                    for culture in check_df.culture.unique():
+                        plotting_functions.make_corrplots(df=mfi,
+                                                            pert_plate=plate,
                                                             metric='logMFI_norm',
-                                                            build=build,
-                                                            culture=culture)
-            # Rank control barcodes in each well
-            print("Generating ctlbc rank heatmaps....")
+                                                        build=build,
+                                                        culture=culture)
+                        plotting_functions.make_corrplots(df=mfi,
+                                                            pert_plate=plate,
+                                                        metric='logMFI_norm',
+                                                        build=build,
+                                                        culture=culture)
+            # Rank control barcodes in each plate
             ctls = ['prism invariant ' + str(i) for i in range(1,11)]
             data = mfi[mfi.ccle_name.isin(ctls)] 
+
+            # Compute pairwise correlations of CTLBCs in each plate
             ranked_ctls = data.groupby(['prism_replicate', 'pert_plate', 'pert_well','culture']).apply(df_transform.calculate_ranks)
-            
+            ctl_pairwise_corr = df_transform.calculate_avg_spearman_correlation(ranked_ctls)
+
+            # Generate rank plots
+            print(f"Generating CTLBC rank heatmaps.... ")
             for culture in ranked_ctls.culture.unique():
                 plotting_functions.make_ctlbc_rank_heatmaps(df=ranked_ctls, build=build, culture=culture)
 
-            print("Generating ctlbc rank violin plots....")
+            print("Generating CTLBC rank violin plots....")
             for culture in ranked_ctls.culture.unique():
-                plotting_functions.make_ctlbc_rank_violin(df=ranked_ctls, build=build, culture=culture)
+                plotting_functions.make_ctlbc_rank_violin(df=ranked_ctls, build=build, culture=culture, corrs=ctl_pairwise_corr)
 
             print(f"Report generation is complete!")
 
