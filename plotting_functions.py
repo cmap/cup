@@ -80,8 +80,8 @@ def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
 
     # Upload as json to s3
     s3 = boto3.client('s3')
-    fig_json = g.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+    json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=json.encode('utf-8'))
 
 
 def plot_pass_rates_by_pool(df, build, filename, bucket_name='cup.clue.io'):
@@ -99,8 +99,8 @@ def plot_pass_rates_by_pool(df, build, filename, bucket_name='cup.clue.io'):
 
     # Upload as json to s3
     s3 = boto3.client('s3')
-    fig_json = g.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+    json = g.to_json()
+    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=json.encode('utf-8'))
 
 
 # DISTRIBUTIONS
