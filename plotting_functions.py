@@ -233,6 +233,12 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
 
 def make_corrplots(df, pert_plate, build, culture='PR500', metric='logMFI_norm', bucket_name='cup.clue.io'):
     data = df[(df.pert_plate == pert_plate) & (df.culture == culture)]
+    
+    # If there are not enough distinct replicates for the given pert_plate, skip plotting
+    if data['replicate'].nunique() < 2:
+        print(f"Not enough distinct replicates for {pert_plate} in {culture}, skipping plot generation.")
+        return
+    
     pivoted_df = data.pivot_table(index=['pert_iname', 'pert_dose', 'pert_type','ccle_name'], 
                                   columns=['replicate'], 
                                   values=metric).reset_index()
