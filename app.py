@@ -87,6 +87,8 @@ def get_file(files, file_string):
     for file in files:
         if file_string in file:
             return file
+        else:
+            print(f"File {file_string} not found, skipping.")
 
 
 def upload_df_to_s3(df, filename, prefix, bucket_name='cup.clue.io'):
@@ -299,6 +301,7 @@ if view_report and build:
                     with tab:
                         filename = f"count_{label}_pert_type_heatmap.png"
                         load_image_from_s3(filename=filename, prefix=build)
+                        
                 st.subheader('Count by plate')
                 st.markdown(descriptions.build_heatmap_count)
                 tab_labels = cultures
@@ -351,6 +354,24 @@ if view_report and build:
                         load_image_from_s3(filename=heatmap_filename, prefix=build)
                         st.subheader(f"By plate")
                         load_image_from_s3(filename=violin_filename, prefix=build)
+            
+            with st.expander('Normalization'):
+                st.markdown(descriptions.norm_impact)
+                st.header('Impact on positive controls')
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_trt_poscon_norm.png"
+                        load_image_from_s3(filename=filename, prefix=build)
+                        
+                st.header('Impact on vehicle controls')
+                tab_labels = cultures
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        filename = f"{label}_ctl_vehicle_norm.png"
+                        load_image_from_s3(filename=filename, prefix=build)
 
             with st.expander('Data removed'):
                 st.header('Instances removed')
@@ -400,9 +421,9 @@ if view_report and build:
                 with by_plate:
                     st.markdown(descriptions.pass_by_plate)
                     load_plot_from_s3(filename='pass_by_plate.json', prefix=build)
-                with by_pool:
-                    st.markdown(descriptions.pass_by_pool)
-                    load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
+                #with by_pool:
+                #    st.markdown(descriptions.pass_by_pool)
+                #    load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
 
                 # Show pass/fail table
                 st.subheader('Pass/fail table')
@@ -494,6 +515,9 @@ elif generate_report and build:
         print('MFI file found: ' + mfi_file)
         lfc_file = 's3://' + get_file(file_list, 'LEVEL5')
         print('LFC file found: ' + lfc_file)
+        if get_file(file_list, 'removed_instances_count'):
+            rm_inst_cnt_file = 's3://' + get_file(file_list, 'removed_instances_count')
+            print('Record of low count removal instances found: ' + rm_inst_cnt_file)
 
         with st.spinner('Generating report and uploading results'):
 
@@ -647,6 +671,13 @@ elif generate_report and build:
 
 
             # Generate and save plots
+            print("Generating control compound normalization plots....")
+            for culture in cultures:
+                plotting_functions.make_control_norm_plots(mfi=mfi,
+                                                           qc=qc,
+                                                           culture=culture,
+                                                           build=build)
+            
             print("Generating control variability violin plots....")
             for culture in cultures:
                 plotting_functions.make_control_violin_plot(df=mfi,
@@ -685,9 +716,9 @@ elif generate_report and build:
             plotting_functions.plot_pass_rates_by_plate(df=qc_out,
                                                         build=build,
                                                         filename='pass_by_plate.json')
-            plotting_functions.plot_pass_rates_by_pool(df=qc_out,
-                                                       build=build,
-                                                       filename='pass_by_pool.json')
+            #plotting_functions.plot_pass_rates_by_pool(df=qc_out,
+            #                                           build=build,
+            #                                           filename='pass_by_pool.json')
 
             print("Generating dynamic range plots.....")
             plotting_functions.plot_dynamic_range(df=qc_out,
