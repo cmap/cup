@@ -231,70 +231,29 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
 
 # REPLICATE CORRELATION
 
-def make_corrplots(df, pert_plate, build, culture='PR500', metric='logMFI_norm', bucket_name='cup.clue.io'):
+def corrdot(*args, **kwargs):
+    corr_r = args[0].corr(args[1], 'pearson')
+    corr_text = f"{corr_r:2.2f}".replace("0.", ".")
+    ax = plt.gca()
+    ax.set_axis_off()
+    marker_size = abs(corr_r) * 10000
+    ax.scatter([.5], [.5], marker_size, [corr_r], alpha=0.6, cmap="coolwarm",
+               vmin=-1, vmax=1, transform=ax.transAxes)
+    font_size = abs(corr_r) * 40 + 5
+    ax.annotate(corr_text, [.5, .5,],  xycoords="axes fraction",
+                ha='center', va='center', fontsize=font_size)
+
+def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_name='cup.clue.io'):
     data = df[(df.pert_plate == pert_plate) & (df.culture == culture)]
+    pivot_data = data[data.pert_type=='trt_cp'].pivot_table(index=['pert_plate','pert_type','pert_iname','pert_dose','ccle_name'], columns='replicate', values=metric).reset_index()
+    pivot_data.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in pivot_data.columns.values]
+    \
+    g = sns.PairGrid(pivot_data.drop(columns=['pert_dose']), diag_sharey=False)
+    g.map_lower(sns.regplot, line_kws={'color':'black'}, scatter_kws={'alpha':0.3, 's':1})
+    g.map_diag(sns.histplot, kde_kws={'color':'black'})
+    g.map_upper(corrdot)
+    g.fig.suptitle(f"{pert_plate}")
     
-    # If there are not enough distinct replicates for the given pert_plate, skip plotting
-    if data['replicate'].nunique() < 2:
-        print(f"Not enough distinct replicates for {pert_plate} in {culture}, skipping plot generation.")
-        return
-    
-    pivoted_df = data.pivot_table(index=['pert_iname', 'pert_dose', 'pert_type','ccle_name'], 
-                                  columns=['replicate'], 
-                                  values=metric).reset_index()
-
-    # Flatten the multi-level column index if necessary
-    pivoted_df.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in pivoted_df.columns.values]
-
-    # Get a list of all the unique 'replicate' values
-    replicates = sorted([col for col in pivoted_df if col.startswith('X')])
-
-    # Create a figure with a grid of subplots
-    fig, axes = plt.subplots(len(replicates), len(replicates), figsize=(7, 7))
-    
-    # Set a title for the figure
-    fig.suptitle(pert_plate, fontsize=16)
-
-    # Iterate over each subplot and fill in the appropriate plot
-    for i, rep_i in enumerate(replicates):
-        for j, rep_j in enumerate(replicates):
-            ax = axes[i, j]
-            # Hide the axis for upper triangle plots
-            if i < j:
-                ax.axis('off')
-                continue
-            
-            if i == j:  # Diagonal: KDE plot
-                sns.kdeplot(data=pivoted_df, x=rep_i, ax=ax)
-                ax.set_xlabel('')  # Remove x-label
-                ax.set_ylabel('')  # Remove y-label
-            else:  # Lower triangle: Scatter plot
-                sns.scatterplot(data=pivoted_df, x=rep_i, y=rep_j, ax=ax, s=3)
-                # Calculate and annotate Pearson correlation
-                clean_df = pivoted_df[[rep_i, rep_j]].dropna()
-                corr, _ = pearsonr(clean_df[rep_i], clean_df[rep_j])
-                ax.annotate(f'ρ = {corr:.2f}', xy=(0.05, 0.95), xycoords='axes fraction', ha='left', va='top', size=10)
-            
-            # Set x-axis labels only for the bottom row subplots
-            if i == len(replicates) - 1:
-                ax.set_xlabel(rep_j.split('_')[-1])
-                ax.tick_params(labelbottom=True)  # Show x-axis ticks
-            else:
-                ax.set_xlabel('')
-                ax.tick_params(labelbottom=False)  # Hide x-axis ticks
-            
-            # Set y-axis labels only for the first column subplots
-            if j == 0:
-                ax.set_ylabel(rep_i.split('_')[-1])
-                ax.tick_params(labelleft=True)  # Show y-axis ticks
-            else:
-                ax.set_ylabel('')
-                ax.tick_params(labelleft=False)  # Hide y-axis ticks
-
-
-    # Adjust layout to prevent overlap
-    fig.tight_layout()
-
     # Save plot as PNG to buffer
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
@@ -757,3 +716,42 @@ def make_ctlbc_rank_violin(df, build, culture, corrs):
     s3 = boto3.client('s3')
     object_key = f"{build}/{culture}_ctlbc_rank_violin.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+    
+    
+def make_control_norm_plots(mfi, qc, culture, build):
+    df = mfi.merge(qc[['prism_replicate','ccle_name','pass']], on=['prism_replicate','ccle_name'], how='left')
+    df = df.loc[df.culture == culture]
+    df_group = df.groupby(['pert_type','ccle_name','prism_replicate','replicate','pert_plate','pass']).median(numeric_only=True).reset_index()
+    height = len(df_group.replicate.unique())*4
+    width = len(df_group.pert_plate.unique())*5
+
+    for pert in ['trt_poscon','ctl_vehicle']:
+        data = df_group[(df_group.pert_type == pert)&(~df_group.ccle_name.str.contains('prism'))]
+        fraction_pass_true = data.groupby(['replicate', 'pert_plate'])['pass'].apply(lambda x: (x == True).mean()).reset_index()
+        fraction_pass_true['label'] = fraction_pass_true['pass'].apply(lambda x: f'{x:.2f}')
+        
+        x_coord = data['logMFI'].quantile(0.1)
+        y_coord = data['logMFI_norm'].quantile(0.95)  # For example, 90th percentile
+
+        
+        p = (
+            ggplot(data, aes(y='logMFI_norm', x='logMFI', color='pass')) +
+            geom_point() +
+            facet_grid('replicate ~ pert_plate') +
+            geom_abline(linetype='--') +
+            geom_text(data=fraction_pass_true, mapping=aes(x=x_coord, y=y_coord, label='label'), inherit_aes=False, size=20) +
+            theme(figure_size=(width,height)) +
+            theme(text=element_text(size=20)) +
+            xlab(f"{pert}") +
+            ylab(f"{pert} normalized")
+        )
+        
+        # Save plot to a BytesIO object as PNG
+        img_data = io.BytesIO()
+        p.save(img_data, format='png', width=width, height=height, dpi=200)
+        img_data.seek(0)
+
+        # Upload to S3
+        s3 = boto3.client('s3')
+        object_key = f"{build}/{culture}_{pert}_norm.png"
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
