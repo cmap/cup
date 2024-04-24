@@ -513,7 +513,7 @@ def generate_cbc_quantile_plot(df, build, culture):
         data.sort_values('sort', inplace=True)
 
         # make plots
-        sns.lineplot(data=data, ax=axes[i], x='sort', y='quantile')  # Replace with your function
+        sns.lineplot(data=data, ax=axes[i], x='sort', y='quantile')
         axes[i].set_title(f'{unique_values[i]}')  # Optional title for each subplot
         axes[i].plot([0, 10], [0, 1], color='grey', linestyle='--')
         axes[i].set_xlabel('')
@@ -755,3 +755,84 @@ def make_control_norm_plots(mfi, qc, culture, build):
         s3 = boto3.client('s3')
         object_key = f"{build}/{culture}_{pert}_norm.png"
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+        
+        
+def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None, limits=None,
+                  fig_size=(8,3), title='', text_size=6, annotation='pert_type_annotation', tick_size=5):
+    
+    # Add column/row labels and properly order
+    df['row'] = df['pert_well'].str[0]
+    df['col'] = df['pert_well'].str[1:3]
+    df['row'] = df['row'].astype('category')
+    df['col'] = df['col'].astype('category')
+    df['row'] = pd.Categorical(df['row'], categories=reversed(df['row'].cat.categories),
+                                         ordered=True)
+    
+    # Get plot width and height
+    width = len(df['replicate'].unique()) * (8/3)
+    height = len(df['pert_plate'].unique()) * 1
+
+    if facet_method == 'wrap':
+        g = (
+            ggplot(df, aes(x='col', y='row', fill=metric)) +
+            geom_tile() +
+            facet_wrap(facets) +
+            scale_fill_gradient(limits=limits) +
+            theme_minimal() +
+            theme(
+                figure_size=fig_size,
+                axis_text_x=element_text(size=tick_size),
+                axis_text_y=element_text(size=tick_size)
+            ) +
+            xlab('') +
+            ylab('') +
+            ggtitle(title) +
+            scale_fill_gradient(low='darkblue', high='white', limits=limits) +
+            geom_text(aes(label=annotation), va='center', ha='center', size=text_size)
+        )
+    elif facet_method == 'grid':
+        g = (
+                ggplot(df, aes(x='col', y='row', fill=metric)) +
+                geom_tile() +
+                facet_grid(facets) +
+                scale_fill_gradient(limits=limits) +
+                theme_minimal() +
+                theme(
+                    figure_size=fig_size,
+                    axis_text_x=element_text(size=tick_size),
+                    axis_text_y=element_text(size=tick_size)
+                ) +
+                xlab('') +
+                ylab('') +
+                ggtitle(title) +
+                scale_fill_gradient(low='darkblue', high='white', limits=limits) +
+                geom_text(aes(label=annotation), va='center', ha='center', size=text_size)
+        )
+    else:
+        g = (
+                ggplot(df, aes(x='col', y='row', fill=metric)) +
+                geom_tile() +
+                scale_fill_gradient(limits=limits) +
+                theme_minimal() +
+                theme(
+                    figure_size=fig_size,
+                    axis_text_x=element_text(size=tick_size),
+                    axis_text_y=element_text(size=tick_size)
+                ) +
+                xlab('') +
+                ylab('') +
+                ggtitle(title) +
+                scale_fill_gradient(low='darkblue', high='white', limits=limits) +
+                geom_text(aes(label=annotation), va='center', ha='center', size=text_size)
+        )
+    # Save plot to a BytesIO object as PNG
+    img_data = io.BytesIO()
+    g.save(img_data, format='png', dpi=150, width=width, height=height)
+    img_data.seek(0)
+
+    # Upload to S3
+    s3 = boto3.client('s3')
+    object_key = f"{build}/{metric}_{culture}_heatmaps.png"
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)    
+
+    

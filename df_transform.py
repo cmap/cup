@@ -6,6 +6,9 @@ from scipy.stats import spearmanr
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
+pert_type_mapping = {'ctl_vehicle':'v',
+                     'trt_poscon':'p',
+                     'trt_cp':''}
 
 
 def add_pass_rates(df):
@@ -273,3 +276,39 @@ def calculate_avg_spearman_correlation(df):
         correlations[replicate] = avg_corr
 
     return correlations
+
+def annotate_pert_types(df):
+    """
+    Add a field with a truncated annotation for perturbation types in a DataFrame.
+    
+    Parameters:
+    df (pd.DataFrame): A pandas DataFrame containing at least one column named 'pert_type' 
+                       which holds the perturbation types to be annotated.
+
+    Returns:
+    pd.DataFrame: The modified DataFrame with an additional column 'pert_type_annotate'
+                  that contains the truncated perturbation annotations.
+    """
+    df['pert_type_annotation'] = df['pert_type'].map(pert_type_mapping)
+    return df
+
+
+def median_plate_well(df, cols=['logMFI', 'logMFI_norm', 'count']):
+    """
+    Group by detection plate and pert well and get the median of specified columns.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the data to be processed.
+        cols (list of str): List of column names for which to calculate the median.
+
+    Returns:
+        pd.DataFrame: DataFrame with the median values of specified columns, grouped by 'prism_replicate',
+                      'pert_plate', 'replicate', 'pert_well', and 'pert_type'.
+    """
+    # Ensure that only the necessary columns are included in the calculation to avoid errors
+    group_cols = ['prism_replicate', 'pert_plate', 'replicate', 'pert_well', 'pert_type']
+    relevant_cols = group_cols + cols  # Combine grouping columns and columns for which to calculate median
+    grouped_df = df[relevant_cols].groupby(group_cols)  # Group by specified columns
+    median_df = grouped_df.median()  # Calculate the median for the grouped data
+    
+    return median_df.reset_index()  # Reset index to turn grouped indices back into columns
