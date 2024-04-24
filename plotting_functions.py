@@ -722,8 +722,11 @@ def make_control_norm_plots(mfi, qc, culture, build):
     df = mfi.merge(qc[['prism_replicate','ccle_name','pass']], on=['prism_replicate','ccle_name'], how='left')
     df = df.loc[df.culture == culture]
     df_group = df.groupby(['pert_type','ccle_name','prism_replicate','replicate','pert_plate','pass']).median(numeric_only=True).reset_index()
-    height = len(df_group.replicate.unique())*4
-    width = len(df_group.pert_plate.unique())*5
+    width = len(df_group.replicate.unique())*4
+    height = len(df_group.pert_plate.unique())*3
+    
+    colors = {False: 'red',
+              True: 'dodgerblue'}
 
     for pert in ['trt_poscon','ctl_vehicle']:
         data = df_group[(df_group.pert_type == pert)&(~df_group.ccle_name.str.contains('prism'))]
@@ -736,19 +739,19 @@ def make_control_norm_plots(mfi, qc, culture, build):
         
         p = (
             ggplot(data, aes(y='logMFI_norm', x='logMFI', color='pass')) +
-            geom_point() +
-            facet_grid('replicate ~ pert_plate') +
+            geom_point(alpha=0.4) +
+            facet_grid('pert_plate ~ replicate') +
             geom_abline(linetype='--') +
-            geom_text(data=fraction_pass_true, mapping=aes(x=x_coord, y=y_coord, label='label'), inherit_aes=False, size=20) +
-            theme(figure_size=(width,height)) +
-            theme(text=element_text(size=20)) +
+            geom_text(data=fraction_pass_true, mapping=aes(x=x_coord, y=y_coord, label='label'), inherit_aes=False, size=10) +
             xlab(f"{pert}") +
-            ylab(f"{pert} normalized")
+            ylab(f"{pert} normalized") +
+            scale_color_manual(values=colors) +
+            theme(text=element_text(size=10))
         )
         
         # Save plot to a BytesIO object as PNG
         img_data = io.BytesIO()
-        p.save(img_data, format='png', width=width, height=height, dpi=200)
+        p.save(img_data, format='png', width=width, height=height)
         img_data.seek(0)
 
         # Upload to S3
@@ -758,7 +761,8 @@ def make_control_norm_plots(mfi, qc, culture, build):
         
         
 def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None, limits=None,
-                  fig_size=(8,3), title='', text_size=6, annotation='pert_type_annotation', tick_size=5):
+                  fig_size=(8,3), title='', text_size=5, annotation='pert_type_annotation', tick_size=5,
+                  text_color='white'):
     
     # Add column/row labels and properly order
     df['row'] = df['pert_well'].str[0]
@@ -770,32 +774,14 @@ def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None
     
     # Get plot width and height
     width = len(df['replicate'].unique()) * (8/3)
-    height = len(df['pert_plate'].unique()) * 1
+    height = len(df['pert_plate'].unique()) * 2
 
-    if facet_method == 'wrap':
-        g = (
-            ggplot(df, aes(x='col', y='row', fill=metric)) +
-            geom_tile() +
-            facet_wrap(facets) +
-            scale_fill_gradient(limits=limits) +
-            theme_minimal() +
-            theme(
-                figure_size=fig_size,
-                axis_text_x=element_text(size=tick_size),
-                axis_text_y=element_text(size=tick_size)
-            ) +
-            xlab('') +
-            ylab('') +
-            ggtitle(title) +
-            scale_fill_gradient(low='darkblue', high='white', limits=limits) +
-            geom_text(aes(label=annotation), va='center', ha='center', size=text_size)
-        )
-    elif facet_method == 'grid':
-        g = (
+    if metric == 'count':
+        if facet_method == 'wrap':
+            g = (
                 ggplot(df, aes(x='col', y='row', fill=metric)) +
                 geom_tile() +
-                facet_grid(facets) +
-                scale_fill_gradient(limits=limits) +
+                facet_wrap(facets) +
                 theme_minimal() +
                 theme(
                     figure_size=fig_size,
@@ -805,14 +791,48 @@ def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None
                 xlab('') +
                 ylab('') +
                 ggtitle(title) +
-                scale_fill_gradient(low='darkblue', high='white', limits=limits) +
-                geom_text(aes(label=annotation), va='center', ha='center', size=text_size)
-        )
+                scale_fill_gradient(low='white', high='dodgerblue', limits=limits) +
+                geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+            )
+        elif facet_method == 'grid':
+            g = (
+                    ggplot(df, aes(x='col', y='row', fill=metric)) +
+                    geom_tile() +
+                    facet_grid(facets) +
+                    theme_minimal() +
+                    theme(
+                        figure_size=fig_size,
+                        axis_text_x=element_text(size=tick_size),
+                        axis_text_y=element_text(size=tick_size)
+                    ) +
+                    xlab('') +
+                    ylab('') +
+                    ggtitle(title) +
+                    scale_fill_gradient(low='white', high='dodgerblue', limits=limits) +
+                    geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+            )
+        else:
+            g = (
+                    ggplot(df, aes(x='col', y='row', fill=metric)) +
+                    geom_tile() +
+                    theme_minimal() +
+                    theme(
+                        figure_size=fig_size,
+                        axis_text_x=element_text(size=tick_size),
+                        axis_text_y=element_text(size=tick_size)
+                    ) +
+                    xlab('') +
+                    ylab('') +
+                    ggtitle(title) +
+                    scale_fill_gradient(low='darkblue', high='white', limits=limits) +
+                    geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+            )
     else:
-        g = (
+        if facet_method == 'wrap':
+            g = (
                 ggplot(df, aes(x='col', y='row', fill=metric)) +
                 geom_tile() +
-                scale_fill_gradient(limits=limits) +
+                facet_wrap(facets) +
                 theme_minimal() +
                 theme(
                     figure_size=fig_size,
@@ -823,8 +843,41 @@ def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None
                 ylab('') +
                 ggtitle(title) +
                 scale_fill_gradient(low='darkblue', high='white', limits=limits) +
-                geom_text(aes(label=annotation), va='center', ha='center', size=text_size)
-        )
+                geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+            )
+        elif facet_method == 'grid':
+            g = (
+                    ggplot(df, aes(x='col', y='row', fill=metric)) +
+                    geom_tile() +
+                    facet_grid(facets) +
+                    theme_minimal() +
+                    theme(
+                        figure_size=fig_size,
+                        axis_text_x=element_text(size=tick_size),
+                        axis_text_y=element_text(size=tick_size)
+                    ) +
+                    xlab('') +
+                    ylab('') +
+                    ggtitle(title) +
+                    scale_fill_gradient(low='darkblue', high='white', limits=limits) +
+                    geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+            )
+        else:
+            g = (
+                    ggplot(df, aes(x='col', y='row', fill=metric)) +
+                    geom_tile() +
+                    theme_minimal() +
+                    theme(
+                        figure_size=fig_size,
+                        axis_text_x=element_text(size=tick_size),
+                        axis_text_y=element_text(size=tick_size)
+                    ) +
+                    xlab('') +
+                    ylab('') +
+                    ggtitle(title) +
+                    scale_fill_gradient(low='darkblue', high='white', limits=limits) +
+                    geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+            )
     # Save plot to a BytesIO object as PNG
     img_data = io.BytesIO()
     g.save(img_data, format='png', dpi=150, width=width, height=height)
