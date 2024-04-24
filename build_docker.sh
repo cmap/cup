@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-docker build -t prismcmap/cup-dev:latest .
+docker build --platform=linux/amd64 -t prismcmap/cup-dev:latest .
