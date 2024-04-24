@@ -17,8 +17,8 @@ import json
 import read_build
 import pymysql
 
-logging.basicConfig(filename='./logs/ctg_logs.log')
-logging.debug('This message should go to the log file')
+#logging.basicConfig(filename='./logs/ctg_logs.log')
+#logging.debug('This message should go to the log file')
 
 base_path = Path(__file__)
 
@@ -529,7 +529,8 @@ elif generate_report and build:
             count = df_build.count
             inst = df_build.inst
             cell = df_build.cell
-
+            df_well = df_transform.annotate_pert_types(df_transform.median_plate_well(mfi))
+            
             # Get df of instances that are removed
             instances_removed = df_transform.get_instances_removed(inst=inst, mfi=mfi, cell=cell)
             profiles_removed = df_transform.profiles_removed(df=mfi)
@@ -745,21 +746,28 @@ elif generate_report and build:
 
             print(f"Generating plate heatmaps.....")
             for culture in cultures:
-                plotting_functions.plot_plate_heatmaps(mfi,
-                                                       metric='logMFI',
-                                                       build=build,
-                                                       culture=culture)
-                plotting_functions.plot_plate_heatmaps(mfi,
-                                                       metric='logMFI_norm',
-                                                       build=build,
-                                                       culture=culture)
-                plotting_functions.plot_plate_heatmaps(cnt,
-                                                       metric='count',
-                                                       by_type=False,
-                                                       build=build,
-                                                       culture=culture,
-                                                       vmax=35,
-                                                       vmin=0)
+                plotting_functions.heatmap_plate(df = df_well,
+                                                 metric= 'logMFI',
+                                                 build= build,
+                                                 culture= culture,
+                                                 facet_method= 'grid',
+                                                 facets= 'pert_plate ~ replicate',
+                                                 limits= (4,16))
+                plotting_functions.heatmap_plate(df= df_well,
+                                                 metric= 'logMFI_norm',
+                                                 build= build,
+                                                 culture= culture,
+                                                 facet_method= 'grid',
+                                                 facets= 'pert_plate ~ replicate',
+                                                 limits= (4,16))
+                plotting_functions.heatmap_plate(df= df_well,
+                                                 metric= 'count',
+                                                 build= build,
+                                                 culture= culture,
+                                                 facet_method= 'grid',
+                                                 facets= 'pert_plate ~ replicate',
+                                                 limits= (0,30))
+                                                 
 
             print(f"Generating liver plots.....")
             try:
