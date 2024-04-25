@@ -256,8 +256,8 @@ def corrdot(*args, **kwargs):
     corr_text = f"{corr_r:2.2f}".replace("0.", ".")
     ax = plt.gca()
     ax.set_axis_off()
-    marker_size = abs(corr_r) * 10000
-    ax.scatter([.5], [.5], marker_size, [corr_r], alpha=0.6, cmap="coolwarm",
+    marker_size = 0
+    ax.scatter([.5], [.5], [corr_r],
                vmin=-1, vmax=1, transform=ax.transAxes)
     font_size = abs(corr_r) * 40 + 5
     ax.annotate(corr_text, [.5, .5,],  xycoords="axes fraction",
@@ -268,7 +268,7 @@ def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_
     pivot_data = data[data.pert_type=='trt_cp'].pivot_table(index=['pert_plate','pert_type','pert_iname','pert_dose','ccle_name'], columns='replicate', values=metric).reset_index()
     pivot_data.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in pivot_data.columns.values]
     g = sns.PairGrid(pivot_data.drop(columns=['pert_dose']), diag_sharey=False)
-    g.map_lower(sns.regplot, line_kws={'color':'black'}, scatter_kws={'alpha':0.3, 's':1})
+    g.map_lower(sns.regplot, line_kws=dict(color='red', linewidth=1, linestyle='--'), scatter_kws={'alpha':0.3, 's':1})
     g.map_diag(sns.histplot, kde_kws={'color':'black'})
     g.map_upper(corrdot)
     g.fig.suptitle(f"{pert_plate}")
