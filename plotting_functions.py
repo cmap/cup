@@ -101,15 +101,15 @@ def plot_pass_rates_by_pool(df, culture, build):
 
     # Make plot
     g = (
-        ggplot(df, aes(x='pool_id', fill='pass')) +
-        stat_count() +
-        facet_grid('rep_number ~ pert_plate') +
-        theme(axis_text_x=element_text(rotation=90)) +
-        theme(figure_size=(10,6)) +
-        xlab('') +
-        ylab('') +
-        scale_fill_manual(values=colors) +
-        ggtitle(culture)
+            ggplot(df, aes(x='pool_id', fill='pass')) +
+            stat_count() +
+            facet_grid('rep_number ~ pert_plate') +
+            theme(axis_text_x=element_text(rotation=90)) +
+            theme(figure_size=(10, 6)) +
+            xlab('') +
+            ylab('') +
+            scale_fill_manual(values=colors) +
+            ggtitle(culture)
     )
 
     # Save plot to a BytesIO object as PNG
@@ -260,19 +260,27 @@ def corrdot(*args, **kwargs):
     ax.scatter([.5], [.5], [corr_r],
                vmin=-1, vmax=1, transform=ax.transAxes)
     font_size = abs(corr_r) * 40 + 5
-    ax.annotate(corr_text, [.5, .5,],  xycoords="axes fraction",
+    ax.annotate(corr_text, [.5, .5, ], xycoords="axes fraction",
                 ha='center', va='center', fontsize=font_size)
+
 
 def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_name='cup.clue.io'):
     data = df[(df.pert_plate == pert_plate) & (df.culture == culture)]
-    pivot_data = data[data.pert_type=='trt_cp'].pivot_table(index=['pert_plate','pert_type','pert_iname','pert_dose','ccle_name'], columns='replicate', values=metric).reset_index()
+    pivot_data = data[data.pert_type == 'trt_cp'].pivot_table(
+        index=['pert_plate', 'pert_type', 'pert_iname', 'pert_dose', 'ccle_name'], columns='replicate',
+        values=metric).reset_index()
     pivot_data.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in pivot_data.columns.values]
-    g = sns.PairGrid(pivot_data.drop(columns=['pert_dose']), diag_sharey=False)
-    g.map_lower(sns.regplot, line_kws=dict(color='red', linewidth=1, linestyle='--'), scatter_kws={'alpha':0.3, 's':1})
-    g.map_diag(sns.histplot, kde_kws={'color':'black'})
+    g = sns.PairGrid(pivot_data.drop(columns=['pert_dose']), diag_sharey=True)
+    g.map_lower(sns.regplot, line_kws=dict(color='red', linewidth=1, linestyle='--'),
+                scatter_kws={'alpha': 0.3, 's': 1})
+    g.map_diag(sns.histplot, kde_kws={'color': 'black'})
     g.map_upper(corrdot)
     g.fig.suptitle(f"{pert_plate}")
-    
+
+    # Remove yticks on the left side of the upper left plot
+    if g.axes.shape[0] > 0:
+        g.axes[0, 0].set_yticks([])
+
     # Save plot as PNG to buffer
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
@@ -437,7 +445,8 @@ def make_pert_type_heatmaps(df, build, vmax, vmin, metric='logMFI'):
 def make_build_count_heatmaps(df, build, metric='count'):
     for culture in df.culture.unique():
         # Filter and sort dataframe
-        data = df[(df.culture == culture) & (~df.prism_replicate.str.contains('BASE'))].sort_values(['prism_replicate', 'pert_well'])
+        data = df[(df.culture == culture) & (~df.prism_replicate.str.contains('BASE'))].sort_values(
+            ['prism_replicate', 'pert_well'])
         # Create pivot table
         pivot_table = data.pivot_table(
             values=metric,
@@ -560,7 +569,8 @@ def generate_cbc_quantile_plot(df, build, culture):
 def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
     for culture in df.culture.unique():
         # Filter and sort dataframe
-        data = df[(df.culture == culture) & (~df.prism_replicate.str.contains('BASE'))].sort_values(['prism_replicate', 'pert_well'])
+        data = df[(df.culture == culture) & (~df.prism_replicate.str.contains('BASE'))].sort_values(
+            ['prism_replicate', 'pert_well'])
         # Create pivot table
         pivot_table = data.pivot_table(
             values=metric,
@@ -618,9 +628,10 @@ def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+
 def make_control_violin_plot(df, build, culture):
     # Subset data
-    data = df[(df.pert_type == 'ctl_vehicle') & (df.ccle_name.str.contains('prism')) & (df.culture==culture)]
+    data = df[(df.pert_type == 'ctl_vehicle') & (df.ccle_name.str.contains('prism')) & (df.culture == culture)]
     data['analyte_num'] = data['ccle_name'].str.split(' ').str[2].astype('int')
     data['analyte_num'] = pd.Categorical(data['analyte_num'])
     data.sort_values('analyte_num')
@@ -635,12 +646,12 @@ def make_control_violin_plot(df, build, culture):
 
     # Create plot
     g = (
-        ggplot(data, aes(x='analyte_num', y='logMFI')) +
-        geom_violin() +
-        xlab('') +
-        ylab('logMFI') +
-        facet_grid('pert_plate ~ replicate') +
-        theme(figure_size=(fig_width, fig_height))
+            ggplot(data, aes(x='analyte_num', y='logMFI')) +
+            geom_violin() +
+            xlab('') +
+            ylab('logMFI') +
+            facet_grid('pert_plate ~ replicate') +
+            theme(figure_size=(fig_width, fig_height))
     )
 
     # Save plot to a BytesIO object as PNG
@@ -653,6 +664,7 @@ def make_control_violin_plot(df, build, culture):
     object_key = f"{build}/{culture}_ctl_violin.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+
 # Control barcode rank heatmaps
 def make_ctlbc_rank_heatmaps(df, build, culture):
     # Subset data and add row/col
@@ -661,7 +673,8 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
     plot_data['col'] = plot_data['pert_well'].str[1:3]
     plot_data['row'] = plot_data['row'].astype('category')
     plot_data['col'] = plot_data['col'].astype('category')
-    plot_data['row'] = pd.Categorical(plot_data['row'], categories=reversed(plot_data['row'].cat.categories), ordered=True)
+    plot_data['row'] = pd.Categorical(plot_data['row'], categories=reversed(plot_data['row'].cat.categories),
+                                      ordered=True)
     plot_data['analyte_num'] = plot_data['ccle_name'].str.split(' ').str[2].astype('int')
     plot_data['plate'] = plot_data['pert_plate'] + '_' + plot_data['replicate']
 
@@ -672,19 +685,19 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
 
     plot_data.sort_values('analyte_num', inplace=True)
     p = (
-        ggplot(plot_data, aes(x='col', y='row', fill='rank')) +
-        geom_tile() +
-        facet_grid('plate ~ analyte_num') +
-        theme(
-            figure_size=(fig_width,fig_height),
-            strip_text_x=element_text(size=7),
-            strip_text_y=element_text(size=7),
-            axis_text=element_blank(),
-            axis_ticks_major=element_blank(),
-            plot_margin=1
-        ) +
-        xlab('') +
-        ylab('')
+            ggplot(plot_data, aes(x='col', y='row', fill='rank')) +
+            geom_tile() +
+            facet_grid('plate ~ analyte_num') +
+            theme(
+                figure_size=(fig_width, fig_height),
+                strip_text_x=element_text(size=7),
+                strip_text_y=element_text(size=7),
+                axis_text=element_blank(),
+                axis_ticks_major=element_blank(),
+                plot_margin=1
+            ) +
+            xlab('') +
+            ylab('')
     )
 
     # Save plot to a BytesIO object as PNG
@@ -697,9 +710,10 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
     object_key = f"{build}/{culture}_ctlbc_rank_heatmap.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+
 def make_ctlbc_rank_violin(df, build, culture, corrs):
     # Subset data and add row/col
-    plot_data = df[(~df.prism_replicate.str.contains('BASE'))&(df.culture==culture)]
+    plot_data = df[(~df.prism_replicate.str.contains('BASE')) & (df.culture == culture)]
     plot_data['analyte_num'] = plot_data['ccle_name'].str.split(' ').str[2].astype('int')
     plot_data['analyte_num'] = pd.Categorical(plot_data['analyte_num'])
     plot_data['plate'] = plot_data['pert_plate'] + '_' + plot_data['replicate']
@@ -712,20 +726,21 @@ def make_ctlbc_rank_violin(df, build, culture, corrs):
     n_cols = plot_data.replicate.unique().shape[0]
     n_rows = plot_data.pert_plate.unique().shape[0]
     fig_width = n_cols * 4
-    fig_height = n_rows * 4 
+    fig_height = n_rows * 4
 
     plot_data.sort_values('analyte_num', inplace=True)
     p = (
-        ggplot(plot_data, aes(x='analyte_num', y='rank')) +
-        geom_violin() +
-        geom_text(aes(label='correlation'), data=plot_data.drop_duplicates('prism_replicate'), x=2, y=9.7, size=15, color='blue') +
-        facet_grid('pert_plate ~ replicate') +
-        scale_y_continuous(breaks=range(1, 11)) +
-        xlab('Analyte') +
-        ylab('Rank') +
-        theme(figure_size=(fig_width, fig_height))
+            ggplot(plot_data, aes(x='analyte_num', y='rank')) +
+            geom_violin() +
+            geom_text(aes(label='correlation'), data=plot_data.drop_duplicates('prism_replicate'), x=2, y=9.7, size=15,
+                      color='blue') +
+            facet_grid('pert_plate ~ replicate') +
+            scale_y_continuous(breaks=range(1, 11)) +
+            xlab('Analyte') +
+            ylab('Rank') +
+            theme(figure_size=(fig_width, fig_height))
     )
-    
+
     # Save plot to a BytesIO object as PNG
     img_data = io.BytesIO()
     p.save(img_data, format='png', dpi=150)
@@ -735,39 +750,41 @@ def make_ctlbc_rank_violin(df, build, culture, corrs):
     s3 = boto3.client('s3')
     object_key = f"{build}/{culture}_ctlbc_rank_violin.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
-    
-    
+
+
 def make_control_norm_plots(mfi, qc, culture, build):
-    df = mfi.merge(qc[['prism_replicate','ccle_name','pass']], on=['prism_replicate','ccle_name'], how='left')
+    df = mfi.merge(qc[['prism_replicate', 'ccle_name', 'pass']], on=['prism_replicate', 'ccle_name'], how='left')
     df = df.loc[df.culture == culture]
-    df_group = df.groupby(['pert_type','ccle_name','prism_replicate','replicate','pert_plate','pass']).median(numeric_only=True).reset_index()
-    width = len(df_group.replicate.unique())*4
-    height = len(df_group.pert_plate.unique())*3
-    
+    df_group = df.groupby(['pert_type', 'ccle_name', 'prism_replicate', 'replicate', 'pert_plate', 'pass']).median(
+        numeric_only=True).reset_index()
+    width = len(df_group.replicate.unique()) * 4
+    height = len(df_group.pert_plate.unique()) * 3
+
     colors = {False: 'red',
               True: 'dodgerblue'}
 
-    for pert in ['trt_poscon','ctl_vehicle']:
-        data = df_group[(df_group.pert_type == pert)&(~df_group.ccle_name.str.contains('prism'))]
-        fraction_pass_true = data.groupby(['replicate', 'pert_plate'])['pass'].apply(lambda x: (x == True).mean()).reset_index()
+    for pert in ['trt_poscon', 'ctl_vehicle']:
+        data = df_group[(df_group.pert_type == pert) & (~df_group.ccle_name.str.contains('prism'))]
+        fraction_pass_true = data.groupby(['replicate', 'pert_plate'])['pass'].apply(
+            lambda x: (x == True).mean()).reset_index()
         fraction_pass_true['label'] = fraction_pass_true['pass'].apply(lambda x: f'{x:.2f}')
-        
+
         x_coord = data['logMFI'].quantile(0.1)
         y_coord = data['logMFI_norm'].quantile(0.95)  # For example, 90th percentile
 
-        
         p = (
-            ggplot(data, aes(y='logMFI_norm', x='logMFI', color='pass')) +
-            geom_point(alpha=0.4) +
-            facet_grid('pert_plate ~ replicate') +
-            geom_abline(linetype='--') +
-            geom_text(data=fraction_pass_true, mapping=aes(x=x_coord, y=y_coord, label='label'), inherit_aes=False, size=10) +
-            xlab(f"{pert}") +
-            ylab(f"{pert} normalized") +
-            scale_color_manual(values=colors) +
-            theme(text=element_text(size=10))
+                ggplot(data, aes(y='logMFI_norm', x='logMFI', color='pass')) +
+                geom_point(alpha=0.4) +
+                facet_grid('pert_plate ~ replicate') +
+                geom_abline(linetype='--') +
+                geom_text(data=fraction_pass_true, mapping=aes(x=x_coord, y=y_coord, label='label'), inherit_aes=False,
+                          size=10) +
+                xlab(f"{pert}") +
+                ylab(f"{pert} normalized") +
+                scale_color_manual(values=colors) +
+                theme(text=element_text(size=10))
         )
-        
+
         # Save plot to a BytesIO object as PNG
         img_data = io.BytesIO()
         p.save(img_data, format='png', width=width, height=height)
@@ -777,41 +794,40 @@ def make_control_norm_plots(mfi, qc, culture, build):
         s3 = boto3.client('s3')
         object_key = f"{build}/{culture}_{pert}_norm.png"
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
-        
-        
-def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None, limits=None,
-                  fig_size=(8,3), title='', text_size=5, annotation='pert_type_annotation', tick_size=5,
+
+
+def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, limits=None,
+                  fig_size=(8, 3), title='', text_size=5, annotation='pert_type_annotation', tick_size=5,
                   text_color='white'):
-    
     # Add column/row labels and properly order
     df['row'] = df['pert_well'].str[0]
     df['col'] = df['pert_well'].str[1:3]
     df['row'] = df['row'].astype('category')
     df['col'] = df['col'].astype('category')
     df['row'] = pd.Categorical(df['row'], categories=reversed(df['row'].cat.categories),
-                                         ordered=True)
-    
+                               ordered=True)
+
     # Get plot width and height
-    width = len(df['replicate'].unique()) * (8/3)
+    width = len(df['replicate'].unique()) * (8 / 3)
     height = len(df['pert_plate'].unique()) * 2
 
     if metric == 'count':
         if facet_method == 'wrap':
             g = (
-                ggplot(df, aes(x='col', y='row', fill=metric)) +
-                geom_tile() +
-                facet_wrap(facets) +
-                theme_minimal() +
-                theme(
-                    figure_size=fig_size,
-                    axis_text_x=element_text(size=tick_size),
-                    axis_text_y=element_text(size=tick_size)
-                ) +
-                xlab('') +
-                ylab('') +
-                ggtitle(title) +
-                scale_fill_gradient(low='white', high='dodgerblue', limits=limits) +
-                geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+                    ggplot(df, aes(x='col', y='row', fill=metric)) +
+                    geom_tile() +
+                    facet_wrap(facets) +
+                    theme_minimal() +
+                    theme(
+                        figure_size=fig_size,
+                        axis_text_x=element_text(size=tick_size),
+                        axis_text_y=element_text(size=tick_size)
+                    ) +
+                    xlab('') +
+                    ylab('') +
+                    ggtitle(title) +
+                    scale_fill_gradient(low='white', high='dodgerblue', limits=limits) +
+                    geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
             )
         elif facet_method == 'grid':
             g = (
@@ -849,20 +865,20 @@ def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None
     else:
         if facet_method == 'wrap':
             g = (
-                ggplot(df, aes(x='col', y='row', fill=metric)) +
-                geom_tile() +
-                facet_wrap(facets) +
-                theme_minimal() +
-                theme(
-                    figure_size=fig_size,
-                    axis_text_x=element_text(size=tick_size),
-                    axis_text_y=element_text(size=tick_size)
-                ) +
-                xlab('') +
-                ylab('') +
-                ggtitle(title) +
-                scale_fill_gradient(low='darkblue', high='white', limits=limits) +
-                geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
+                    ggplot(df, aes(x='col', y='row', fill=metric)) +
+                    geom_tile() +
+                    facet_wrap(facets) +
+                    theme_minimal() +
+                    theme(
+                        figure_size=fig_size,
+                        axis_text_x=element_text(size=tick_size),
+                        axis_text_y=element_text(size=tick_size)
+                    ) +
+                    xlab('') +
+                    ylab('') +
+                    ggtitle(title) +
+                    scale_fill_gradient(low='darkblue', high='white', limits=limits) +
+                    geom_text(aes(label=annotation), va='center', ha='center', size=text_size, color=text_color)
             )
         elif facet_method == 'grid':
             g = (
@@ -905,6 +921,4 @@ def heatmap_plate(df, metric, build, culture, facet_method = None, facets = None
     # Upload to S3
     s3 = boto3.client('s3')
     object_key = f"{build}/{metric}_{culture}_heatmaps.png"
-    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)    
-
-    
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
