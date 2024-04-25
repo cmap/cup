@@ -38,6 +38,9 @@ def plot_dynamic_range(df, metric, build, filename, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 def plot_dynamic_range_norm_raw(df, build, filename, bucket_name='cup.clue.io'):
     g = px.scatter(data_frame=df,
@@ -65,6 +68,9 @@ def plot_dynamic_range_norm_raw(df, build, filename, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # PASS RATES
 def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
@@ -82,6 +88,9 @@ def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
     s3 = boto3.client('s3')
     json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=json.encode('utf-8'))
+
+    # Close the plot
+    plt.close('all')
 
 
 def plot_pass_rates_by_pool(df, culture, build):
@@ -105,7 +114,7 @@ def plot_pass_rates_by_pool(df, culture, build):
             stat_count() +
             facet_grid('rep_number ~ pert_plate') +
             theme(axis_text_x=element_text(rotation=90)) +
-            theme(figure_size=(10, 6)) +
+            theme(figure_size=(10, 4)) +
             xlab('') +
             ylab('') +
             scale_fill_manual(values=colors) +
@@ -121,6 +130,9 @@ def plot_pass_rates_by_pool(df, culture, build):
     s3 = boto3.client('s3')
     object_key = f"{build}/{culture}_pass_by_pool.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close the plot
+    plt.close('all')
 
 
 # DISTRIBUTIONS
@@ -155,6 +167,9 @@ def plot_distributions_by_plate(df, build, filename, culture, pert_types=['trt_p
     s3 = boto3.client('s3')
     full_filename = f"{culture}_{filename}"
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{full_filename}")
+
+    # Close the plot
+    plt.close('all')
 
 
 # BANANA PLOTS
@@ -193,6 +208,9 @@ def plot_banana_plots(df, x, y, filename, build, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # LIVER PLOTS
 
@@ -221,6 +239,9 @@ def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # ERROR RATE V SSMD
 
@@ -248,6 +269,9 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # REPLICATE CORRELATION
 
@@ -262,6 +286,9 @@ def corrdot(*args, **kwargs):
     font_size = abs(corr_r) * 40 + 5
     ax.annotate(corr_text, [.5, .5, ], xycoords="axes fraction",
                 ha='center', va='center', fontsize=font_size)
+
+    # Close the plot
+    plt.close('all')
 
 
 def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_name='cup.clue.io'):
@@ -290,6 +317,9 @@ def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_
     s3 = boto3.client('s3')
     filename = f"{pert_plate}:{culture}_corrplot.png"
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
+
+    # Close plot
+    plt.close('all')
 
 
 def plot_plate_heatmaps(df, metric, build, culture, vmax=4, vmin=16, by_type=True):
@@ -370,6 +400,10 @@ def plot_plate_heatmaps(df, metric, build, culture, vmax=4, vmin=16, by_type=Tru
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
+
 
 def make_pert_type_heatmaps(df, build, vmax, vmin, metric='logMFI'):
     for culture in df.culture.unique():
@@ -441,6 +475,9 @@ def make_pert_type_heatmaps(df, build, vmax, vmin, metric='logMFI'):
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
 
 def make_build_count_heatmaps(df, build, metric='count'):
     for culture in df.culture.unique():
@@ -504,6 +541,9 @@ def make_build_count_heatmaps(df, build, metric='count'):
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
 
 def generate_cbc_quantile_plot(df, build, culture):
     # Filter and get unique values
@@ -564,6 +604,9 @@ def generate_cbc_quantile_plot(df, build, culture):
 
     s3 = boto3.client('s3')
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close plot
+    plt.close('all')
 
 
 def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
@@ -628,6 +671,9 @@ def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
 
 def make_control_violin_plot(df, build, culture):
     # Subset data
@@ -658,6 +704,9 @@ def make_control_violin_plot(df, build, culture):
     img_data = io.BytesIO()
     g.save(img_data, format='png', width=fig_width, height=fig_height, dpi=100)
     img_data.seek(0)
+
+    # Close the plot
+    plt.close('all')
 
     # Upload to S3
     s3 = boto3.client('s3')
@@ -710,6 +759,9 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
     object_key = f"{build}/{culture}_ctlbc_rank_heatmap.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+    # Close the plot
+    plt.close('all')
+
 
 def make_ctlbc_rank_violin(df, build, culture, corrs):
     # Subset data and add row/col
@@ -750,6 +802,9 @@ def make_ctlbc_rank_violin(df, build, culture, corrs):
     s3 = boto3.client('s3')
     object_key = f"{build}/{culture}_ctlbc_rank_violin.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close the plot
+    plt.close('all')
 
 
 def make_control_norm_plots(mfi, qc, culture, build):
@@ -794,6 +849,9 @@ def make_control_norm_plots(mfi, qc, culture, build):
         s3 = boto3.client('s3')
         object_key = f"{build}/{culture}_{pert}_norm.png"
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+        # Close the plot
+        plt.close('all')
 
 
 def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, limits=None,
@@ -922,3 +980,6 @@ def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, li
     s3 = boto3.client('s3')
     object_key = f"{build}/{metric}_{culture}_heatmaps.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close the plot
+    plt.close('all')

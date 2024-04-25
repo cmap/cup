@@ -527,7 +527,7 @@ elif generate_report and build:
         with st.spinner('Generating report and uploading results'):
 
             # Read build and create metric dfs
-            df_build = read_build.read_build_from_s3(build)
+            df_build = read_build.read_build_from_s3(build, data_levels=['qc', 'mfi', 'lfc', 'inst', 'cell'])
             qc = df_build.qc
             mfi = df_build.mfi
             lfc = df_build.lfc
