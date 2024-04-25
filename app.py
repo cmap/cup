@@ -421,9 +421,14 @@ if view_report and build:
                 with by_plate:
                     st.markdown(descriptions.pass_by_plate)
                     load_plot_from_s3(filename='pass_by_plate.json', prefix=build)
-                #with by_pool:
-                #    st.markdown(descriptions.pass_by_pool)
-                #    load_plot_from_s3(filename='pass_by_pool.json', prefix=build)
+                with by_pool:
+                    st.markdown(descriptions.pass_by_pool)
+                    tab_labels = cultures
+                    tabs = st.tabs(tab_labels)
+                    for label, tab in zip(tab_labels, tabs):
+                        with tab:
+                            filename = f"{label}_pass_by_pool.png"
+                            load_image_from_s3(filename=filename, prefix=build)
 
                 # Show pass/fail table
                 st.subheader('Pass/fail table')
@@ -713,9 +718,10 @@ elif generate_report and build:
             plotting_functions.plot_pass_rates_by_plate(df=qc_out,
                                                         build=build,
                                                         filename='pass_by_plate.json')
-            #plotting_functions.plot_pass_rates_by_pool(df=qc_out,
-            #                                           build=build,
-            #                                           filename='pass_by_pool.json')
+            for culture in cultures:
+                plotting_functions.plot_pass_rates_by_pool(df=qc_out[qc_out.culture == culture],
+                                                           build=build,
+                                                           culture=culture)
 
             print("Generating dynamic range plots.....")
             plotting_functions.plot_dynamic_range(df=qc_out,

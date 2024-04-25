@@ -84,23 +84,43 @@ def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=json.encode('utf-8'))
 
 
-def plot_pass_rates_by_pool(df, build, filename, bucket_name='cup.clue.io'):
+def plot_pass_rates_by_pool(df, culture, build):
+    df['replicate'] = df['prism_replicate'].str.split('_').str[3]
+    df['rep_number'] = df['replicate'].str.split('.').str[0]
     n_plates = len(df.prism_replicate.unique())
-    height = math.ceil(n_plates / 3) * 300
-    g = px.histogram(data_frame=df,
-                     x='pool_id',
-                     y='pass',
-                     histfunc='count',
-                     color='pass',
-                     facet_col='prism_replicate',
-                     facet_col_wrap=3,
-                     width=1200,
-                     height=height)
+    n_replicates = len(df.replicate.unique())
+    n_pert_plates = len(df.pert_plate.unique())
 
-    # Upload as json to s3
+    # Set plot width and height based on number of plates
+    width = n_pert_plates * 4
+    height = n_replicates * 3
+
+    # Ensure colors are correct
+    colors = {False: 'red',
+              True: 'dodgerblue'}
+
+    # Make plot
+    g = (
+        ggplot(df, aes(x='pool_id', fill='pass')) +
+        stat_count() +
+        facet_grid('rep_number ~ pert_plate') +
+        theme(axis_text_x=element_text(rotation=90)) +
+        theme(figure_size=(10,6)) +
+        xlab('') +
+        ylab('') +
+        scale_fill_manual(values=colors) +
+        ggtitle(culture)
+    )
+
+    # Save plot to a BytesIO object as PNG
+    img_data = io.BytesIO()
+    g.save(img_data, format='png', dpi=150, width=width, height=height)
+    img_data.seek(0)
+
+    # Upload to S3
     s3 = boto3.client('s3')
-    json = g.to_json()
-    s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=json.encode('utf-8'))
+    object_key = f"{build}/{culture}_pass_by_pool.png"
+    s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
 
 # DISTRIBUTIONS
@@ -247,7 +267,6 @@ def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_
     data = df[(df.pert_plate == pert_plate) & (df.culture == culture)]
     pivot_data = data[data.pert_type=='trt_cp'].pivot_table(index=['pert_plate','pert_type','pert_iname','pert_dose','ccle_name'], columns='replicate', values=metric).reset_index()
     pivot_data.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in pivot_data.columns.values]
-    \
     g = sns.PairGrid(pivot_data.drop(columns=['pert_dose']), diag_sharey=False)
     g.map_lower(sns.regplot, line_kws={'color':'black'}, scatter_kws={'alpha':0.3, 's':1})
     g.map_diag(sns.histplot, kde_kws={'color':'black'})
