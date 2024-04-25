@@ -526,7 +526,6 @@ elif generate_report and build:
             qc = df_build.qc
             mfi = df_build.mfi
             lfc = df_build.lfc
-            count = df_build.count
             inst = df_build.inst
             cell = df_build.cell
             df_well = df_transform.annotate_pert_types(df_transform.median_plate_well(mfi))
@@ -534,10 +533,7 @@ elif generate_report and build:
             # Get df of instances that are removed
             instances_removed = df_transform.get_instances_removed(inst=inst, mfi=mfi, cell=cell)
             profiles_removed = df_transform.profiles_removed(df=mfi)
-
-            # Annotate count df
-            cnt = df_transform.construct_count_df(count, mfi)
-
+            
             # Save list of cultures to metadata json
             cultures = list(mfi.culture.unique())
             plates = list(mfi.prism_replicate.unique())
@@ -570,7 +566,7 @@ elif generate_report and build:
             agg_funcs = {
                 'count': ['median', 'std', 'var', lambda x: x.quantile(0.75) - x.quantile(0.25)]
             }
-            cnt_meta = cnt.groupby('prism_replicate').agg(agg_funcs).reset_index()
+            cnt_meta = mfi[['prism_replicate','count']].groupby('prism_replicate').agg(agg_funcs).reset_index()
             cnt_meta.columns = ['prism_replicate', 'median_count', 'stdev_count', 'var_count', 'iqr_count']
             if 'det_plate' in plate_meta.columns:
                 plate_meta = plate_meta.merge(cnt_meta, left_on='det_plate', right_on='prism_replicate', how='right')
@@ -580,12 +576,12 @@ elif generate_report and build:
                              prefix=build,
                              filename='plate_metadata.json')
 
-            # add count meta to count df
+            # add count meta to mfi df
             if 'det_plate' in plate_meta.columns:
-                cnt = cnt.merge(plate_meta, on=['prism_replicate'], how='left')
-                cnt['plate'] = cnt['prism_replicate'] + "[" + cnt['scanner_id'].astype('str') + "]"
+                mfi = mfi.merge(plate_meta, on=['prism_replicate'], how='left')
+                mfi['plate'] = mfi['prism_replicate'] + "[" + mfi['scanner_id'].astype('str') + "]"
             else:
-                cnt['plate'] = cnt['prism_replicate']
+                mfi['plate'] = mfi['prism_replicate']
 
             # Transform mfi and qc tables
             mfi_out = mfi.pipe(df_transform.add_bc_type)
@@ -705,9 +701,9 @@ elif generate_report and build:
                                                        vmin=4)
 
             print(f"Generating COUNT heatmaps.....")
-            plotting_functions.make_build_count_heatmaps(df=cnt,
+            plotting_functions.make_build_count_heatmaps(df=mfi,
                                                          build=build)
-            plotting_functions.make_pert_type_heatmaps(df=cnt,
+            plotting_functions.make_pert_type_heatmaps(df=mfi,
                                                        build=build,
                                                        metric='count',
                                                        vmax=30,
