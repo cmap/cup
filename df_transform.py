@@ -236,42 +236,38 @@ def calculate_ranks(group):
 
 # Compute pairwise correlations of CTLBC ranks for each plate
 def calculate_avg_spearman_correlation(df):
-    # Remove any BASE plates
-    data=df[~df.prism_replicate.str.contains('BASE')]
-    # Calculate the ranks outside of the loop for all data
+    # Filter out BASE plates and calculate ranks outside of the loop
+    data = df[~df['prism_replicate'].str.contains('BASE')]
     data['rank'] = data.groupby(['prism_replicate', 'pert_well'])['logMFI'].rank(method='min', ascending=False)
 
-    # Create a dictionary to hold the correlation values
+    # Use a pivot table to rearrange data: rows as ccle_names, columns as wells, and cell values as ranks
+    data_pivot = data.pivot_table(index=['prism_replicate', 'ccle_name'], columns='pert_well', values='rank')
+    
+    # Prepare to store correlations
     correlations = {}
 
     # Iterate through each replicate
-    for replicate in data['prism_replicate'].unique():
+    for replicate, group in data_pivot.groupby(level='prism_replicate'):
         print(f"Computing pairwise CTLBC rank correlations for {replicate}")
-        replicate_data = data[data['prism_replicate'] == replicate]
-        wells = replicate_data['pert_well'].unique()
 
-        # Prepare a list to store the Spearman correlation coefficients for this replicate
-        replicate_correlations = []
+        # Drop any NaN values along columns to ensure the ranks line up
+        valid_data = group.dropna(axis=1, how='any')
 
-        # Calculate Spearman correlation for each pair of wells
-        for i in range(len(wells) - 1):
-            for j in range(i + 1, len(wells)):
-                # Get the ranks for each pair of wells
-                ranks_i = replicate_data[replicate_data['pert_well'] == wells[i]].sort_values('ccle_name')['rank']
-                ranks_j = replicate_data[replicate_data['pert_well'] == wells[j]].sort_values('ccle_name')['rank']
+        # Calculate Spearman correlation matrix
+        corr_matrix = valid_data.corr(method='spearman')
+        
+        # Extract the upper triangle of the correlation matrix without the diagonal
+        upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
 
-                # Check if there are a matching number of ranks
-                if len(ranks_i) == len(ranks_j):
-                    # Calculate Spearman correlation
-                    rho, _ = spearmanr(ranks_i, ranks_j)
-                    replicate_correlations.append(rho)
+        # Flatten the matrix and drop NaN values (pairs with insufficient data)
+        correlations_list = upper_tri.unstack().dropna()
 
         # Compute the average correlation for the replicate
-        if replicate_correlations:
-            avg_corr = np.mean(replicate_correlations)
+        if not correlations_list.empty:
+            avg_corr = correlations_list.mean()
         else:
             avg_corr = np.nan
-
+        
         # Store the average correlation in the dictionary
         correlations[replicate] = avg_corr
 
