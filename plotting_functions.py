@@ -102,7 +102,7 @@ def plot_pass_rates_by_pool(df, culture, build):
 
     # Set plot width and height based on number of plates
     width = n_pert_plates * 4
-    height = n_replicates * 3
+    height = 4
 
     # Ensure colors are correct
     colors = {False: 'red',
