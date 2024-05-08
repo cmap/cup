@@ -320,6 +320,21 @@ if view_report and build:
                         filename = f"count_{label}_heatmaps.png"
                         load_image_from_s3(filename=filename, prefix=build)
 
+            with st.expander('Pool behavior'):
+                st.header('Pool level deltaLMFI and correlations')
+                #st.markdown(descriptions.deltaLMFI) TODO: add description
+                tab_labels = plates
+                tabs = st.tabs(tab_labels)
+                for label, tab in zip(tab_labels, tabs):
+                    with tab:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            delta_lmfi_filename = f"{label}_deltaLMFI_heatmaps.png"
+                            load_image_from_s3(filename=delta_lmfi_filename, prefix=build)
+                        with col2:
+                            corr_filename = f"{label}_pool_correlation_heatmaps.png"
+                            load_image_from_s3(filename=corr_filename, prefix=build)
+
             with st.expander('Control barcodes'):
                 # control barcode quantiles
                 st.header('Control barcode quantiles')
@@ -614,8 +629,13 @@ elif generate_report and build:
                                                                                 index=['pert_iname', 'pert_dose',
                                                                                        'pert_plate']).dropna().reset_index()
 
+            #Calculate plate/pool level delta and correaltion
+            print(f"Calculating deltaLMFI and pool level correlations.....")
+            delta_lmfi, pool_corr = df_transform.calculate_delta_lmfi_corr(mfi)
+
             # Make tables of excluded instances
             print(f"Generating tables of excluded instances....")
+
             # By plate
             instances_removed_by_plate = instances_removed.groupby(['culture', 'prism_replicate']).size().reset_index(
                 name='instances_removed')
@@ -624,6 +644,7 @@ elif generate_report and build:
                                    filename='instances_removed_by_plate_table.json',
                                    data=json_data,
                                    prefix=prefix)
+
             # By well
             instances_removed_by_well = instances_removed.groupby(['culture','pert_well']).size().reset_index(name='instances_removed')
             json_data = instances_removed_by_well.to_json(orient='records')
@@ -673,6 +694,12 @@ elif generate_report and build:
 
 
             # Generate and save plots
+            print("Generating deltaLMFI plots....")
+            plotting_functions.plot_delta_lmfi(df=delta_lmfi, build=build)
+
+            print("Generating pool correlation plots....")
+            plotting_functions.plot_pool_correlations(df=pool_corr, build=build)
+
             print("Generating control compound normalization plots....")
             for culture in cultures:
                 plotting_functions.make_control_norm_plots(mfi=mfi,

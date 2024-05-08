@@ -308,3 +308,57 @@ def median_plate_well(df, cols=['logMFI', 'logMFI_norm', 'count']):
     median_df = grouped_df.median()  # Calculate the median for the grouped data
     
     return median_df.reset_index()  # Reset index to turn grouped indices back into columns
+
+
+def annotate_col_row(df):
+    df['row'] = df['pert_well'].str[0]
+    df['col'] = df['pert_well'].str[1:3]
+    df['row'] = df['row'].astype('category')
+    df['col'] = df['col'].astype('category')
+    df['row'] = pd.Categorical(df['row'], categories=reversed(df['row'].cat.categories), ordered=True)
+    return df
+
+
+def calculate_correlation(group):
+    if group['LMFI_norm_median'].notna().any() and group['logMFI_norm'].notna().any():
+        return group['LMFI_norm_median'].corr(group['logMFI_norm'])
+    else:
+        return pd.NA  # Return NA if there are not enough data points
+
+
+def calculate_delta_lmfi_corr(df):
+    LMFI_median = (
+        df[df['pert_type'] == "trt_cp"]
+        .groupby(['rid', 'ccle_name', 'culture', 'pert_type', 'pert_iname', 'pert_dose'])
+        .agg(
+            LMFI_median=('logMFI', lambda x: x.median(skipna=True)),
+            LMFI_norm_median=('logMFI_norm', lambda x: x.median(skipna=True))
+        )
+        .reset_index()
+    )
+
+    # Performing a left join in pandas
+    delta_LMFI = pd.merge(df, LMFI_median, how='left',
+                          on=['rid', 'ccle_name', 'culture', 'pert_type', 'pert_iname', 'pert_dose'])
+
+    # Calculating the delta values
+    delta_LMFI['delta_LMFI'] = delta_LMFI['logMFI'] - delta_LMFI['LMFI_median']
+    delta_LMFI['delta_LMFI_norm'] = delta_LMFI['logMFI_norm'] - delta_LMFI['LMFI_norm_median']
+
+    # Create median by pool
+    delta_LMFI_poolmedian = \
+    delta_LMFI.groupby(['prism_replicate', 'pool_id', 'pert_well', 'pert_iname', 'pert_dose', 'pert_type', 'cell_set'])[
+        'delta_LMFI'].median().reset_index(name='delta_LMFI_poolmedian')
+
+    # Annotate rows/cols
+    delta_LMFI = annotate_col_row(delta_LMFI)
+    delta_LMFI_poolmedian = annotate_col_row(delta_LMFI_poolmedian)
+
+    # Group delta_LMFI for replicate correlation
+    delta_LMFI_grouped = delta_LMFI.groupby(['cell_set', 'pool_id', 'pert_well',
+                                          'pert_iname', 'pert_dose', 'pert_type', 'pert_plate'])
+
+    corr_df = delta_LMFI_grouped.apply(calculate_correlation).reset_index(name='LMFInorm_corr')
+    corr_df = corr_df.merge(delta_LMFI_poolmedian, on=['pert_type','pert_well','pert_dose','pert_iname','cell_set','pool_id'])
+
+    return delta_LMFI_poolmedian, corr_df

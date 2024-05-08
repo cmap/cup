@@ -983,3 +983,66 @@ def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, li
 
     # Close the plot
     plt.close('all')
+
+
+def plot_delta_lmfi(df, build):
+    for plate in df.prism_replicate.unique():
+        g = (
+                ggplot(df[(df.prism_replicate == plate) & (df.pool_id != 'CTLBC')],
+                aes(x='col', y='row', fill='abs(delta_LMFI_poolmedian)')) +
+                geom_tile() +  # Use geom_tile for heatmap-like visualization
+                scale_fill_gradient(low="dodgerblue", high="red") +  # Gradient fill based on the absolute values
+                facet_wrap('pool_id', ncol=5) +  # Facet by pool_id
+                theme_minimal() +
+                theme(
+                    axis_text_x=element_text(size=2),  # Smaller text size for x-axis ticks
+                    axis_text_y=element_text(size=3)  # Smaller text size for y-axis ticks
+                ) +
+                labs(x="", y="", fill="|Delta LMFI|")  # Labels for axes and legend
+        )
+
+        # Save plot to a BytesIO object as PNG
+        img_data = io.BytesIO()
+        g.save(img_data, format='png', dpi=150)
+        img_data.seek(0)
+
+        # Upload to S3
+        s3 = boto3.client('s3')
+        object_key = f"{build}/{plate}_deltaLMFI_heatmaps.png"
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+        # Close the plot
+        plt.close('all')
+
+
+def plot_pool_correlations(df, build):
+    data = df[(df.pool_id != 'CTLBC')].dropna()
+    data['LMFInorm_corr'] = data['LMFInorm_corr'].astype('float')
+
+    for plate in data.prism_replicate.unique():
+        plot_data = data[data.prism_replicate == plate]
+        g = (
+                ggplot(plot_data, aes(x='col', y='row', fill='LMFInorm_corr')) +
+                geom_tile() +
+                facet_wrap('pool_id') +
+                theme_minimal() +
+                theme(
+                    axis_text_x=element_text(size=2),  # Smaller text size for x-axis ticks
+                    axis_text_y=element_text(size=3)  # Smaller text size for y-axis ticks
+                ) +
+                scale_fill_gradient(low='red', high='dodgerblue')
+        )
+
+        # Save plot to a BytesIO object as PNG
+        img_data = io.BytesIO()
+        g.save(img_data, format='png', dpi=150)
+        img_data.seek(0)
+
+        # Upload to S3
+        s3 = boto3.client('s3')
+        object_key = f"{build}/{plate}_pool_correlation_heatmaps.png"
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+        # Close the plot
+        plt.close('all')
+
