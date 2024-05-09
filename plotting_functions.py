@@ -2,24 +2,24 @@ import boto3
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import streamlit as st
 import numpy as np
-from scipy import stats
-from itertools import combinations
 import seaborn as sns
 import io
 import matplotlib.pyplot as plt
-import plotly.figure_factory as ff
-import plotly.subplots as sp
-import plotly.io as pio
 from matplotlib.colors import ListedColormap
 import df_transform
-import math
 from plotnine import *
-from scipy.stats import pearsonr
+import warnings
+from plotnine.exceptions import PlotnineWarning
 
+# Filter plotnine warnings
+warnings.filterwarnings('ignore', category=PlotnineWarning)
+
+# Set thresholds
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
+delta_lmfi_threshold = -3
+corr_threshold = 0.6
 
 
 # DYNAMIC RANGE
@@ -402,7 +402,6 @@ def plot_plate_heatmaps(df, metric, build, culture, vmax=4, vmin=16, by_type=Tru
 
         # Close plot
         plt.close('all')
-
 
 
 def make_pert_type_heatmaps(df, build, vmax, vmin, metric='logMFI'):
@@ -857,6 +856,8 @@ def make_control_norm_plots(mfi, qc, culture, build):
 def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, limits=None,
                   fig_size=(8, 3), title='', text_size=5, annotation='pert_type_annotation', tick_size=5,
                   text_color='white'):
+    # Filter data
+    df = df[df.culture == culture]
     # Add column/row labels and properly order
     df['row'] = df['pert_well'].str[0]
     df['col'] = df['pert_well'].str[1:3]
@@ -985,11 +986,11 @@ def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, li
     plt.close('all')
 
 
-def plot_delta_lmfi(df, build):
+def plot_delta_lmfi_heatmaps(df, build):
     for plate in df.prism_replicate.unique():
         g = (
                 ggplot(df[(df.prism_replicate == plate) & (df.pool_id != 'CTLBC')],
-                aes(x='col', y='row', fill='abs(delta_LMFI_poolmedian)')) +
+                       aes(x='col', y='row', fill='abs(delta_LMFI_poolmedian)')) +
                 geom_tile() +  # Use geom_tile for heatmap-like visualization
                 scale_fill_gradient(low="dodgerblue", high="red") +  # Gradient fill based on the absolute values
                 facet_wrap('pool_id', ncol=5) +  # Facet by pool_id
@@ -1015,7 +1016,7 @@ def plot_delta_lmfi(df, build):
         plt.close('all')
 
 
-def plot_pool_correlations(df, build):
+def plot_pool_correlations_heatmaps(df, build):
     data = df[(df.pool_id != 'CTLBC')].dropna()
     data['LMFInorm_corr'] = data['LMFInorm_corr'].astype('float')
 
@@ -1030,7 +1031,8 @@ def plot_pool_correlations(df, build):
                     axis_text_x=element_text(size=2),  # Smaller text size for x-axis ticks
                     axis_text_y=element_text(size=3)  # Smaller text size for y-axis ticks
                 ) +
-                scale_fill_gradient(low='red', high='dodgerblue')
+                scale_fill_gradient(low='red', high='dodgerblue') +
+                labs(x="", y="", fill="Correlation")
         )
 
         # Save plot to a BytesIO object as PNG
@@ -1046,3 +1048,60 @@ def plot_pool_correlations(df, build):
         # Close the plot
         plt.close('all')
 
+
+def plot_delta_lmfi_histograms(df, build, delta_lmfi_threshold_plot=delta_lmfi_threshold):
+    for plate in df.prism_replicate.unique():
+        g = (
+                ggplot(df[(df.prism_replicate == plate) & (df.pool_id != 'CTLBC')], aes(x='delta_LMFI_poolmedian')) +
+                geom_histogram(bins=50) +
+                facet_wrap('pool_id') +
+                scale_y_log10() +
+                geom_vline(xintercept=delta_lmfi_threshold_plot, color='red', linetype='--') +
+                geom_vline(xintercept=abs(delta_lmfi_threshold_plot), color='red', linetype='--') +
+                theme_seaborn() +
+                theme(figure_size=(10, 7)) +
+                ylab('')
+        )
+
+        # Save plot to a BytesIO object as PNG
+        img_data = io.BytesIO()
+        g.save(img_data, format='png', dpi=150)
+        img_data.seek(0)
+
+        # Upload to S3
+        s3 = boto3.client('s3')
+        object_key = f"{build}/{plate}_deltaLMFI_histograms.png"
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+        # Close the plot
+        plt.close('all')
+
+
+def plot_pool_correlation_histograms(df, build, corr_threshold_plot=corr_threshold):
+    for plate in df.prism_replicate.unique():
+        data = df[(df.prism_replicate == plate) & (df.pool_id != 'CTLBC')]
+        # Distribution of correlations
+        sns.set_theme()
+        g = sns.FacetGrid(data=data.dropna(), col='pool_id', col_wrap=5, aspect=1.25, height=4)
+        g.set_titles('{col_name}')
+        g.set_axis_labels("Correlation", "")
+        g.map(sns.histplot, 'LMFInorm_corr', bins=50)
+        for ax in g.axes.flat:
+            ax.axvline(x=corr_threshold_plot, color='red', linestyle='--', linewidth=1.5)
+            ax.set_yscale('log')
+            ax.set_xlabel('')  # Remove x-axis label
+            ax.set_ylabel('')  # Remove y-axis label
+
+        g.fig.text(0.5, 0.02, 'LMFInorm Correlation', ha='center')
+
+        # Save plot as PNG to buffer
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+
+        # Upload as PNG to S3
+        s3 = boto3.client('s3')
+        s3.upload_fileobj(buffer, 'cup.clue.io', f"{build}/{plate}_pool_correlation_histograms.png")
+
+        # Close the plot
+        plt.close('all')

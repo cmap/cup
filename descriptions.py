@@ -93,3 +93,9 @@ norm_impact = 'These plots show the relationship between pre and post-normalizat
        'Generally speaking, we expect to see that normalization leads to lower signal in our poscon and largely similar signal ' \
               'in our vehicle control. When we deviate from these expectations, we tend to see higher numbers of  failures. ' \
                      'The number in each plot represents the fraction of cell lines that pass in that detection plate.'
+
+deltaLMFI = 'In order to identify treatment plate issues,  for each treatment condition (a single perturbagen at a ' \
+            'single dose) we assess the similarity of our replicates in 2 ways. For each cell line, we calculate the ' \
+            'difference in log2(MFI) values between a single replicate and the median of all the replicates, ' \
+            'then take the median value of that difference for each pool. For each pool we also compute the pairwise ' \
+            'correlations between the median log2(MFI) value and the sample log2(MFI) value.'

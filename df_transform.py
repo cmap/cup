@@ -6,9 +6,9 @@ from scipy.stats import spearmanr
 
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
-pert_type_mapping = {'ctl_vehicle':'v',
-                     'trt_poscon':'p',
-                     'trt_cp':''}
+pert_type_mapping = {'ctl_vehicle': 'v',
+                     'trt_poscon': 'p',
+                     'trt_cp': ''}
 
 
 def add_pass_rates(df):
@@ -155,7 +155,7 @@ def generate_pass_fail_tbl(mfi, qc, prefix, bucket='cup.clue.io'):
 
 
 def append_raw_dr(mfi, qc):
-    cols = ['prism_replicate','ccle_name','pert_type','logMFI']
+    cols = ['prism_replicate', 'ccle_name', 'pert_type', 'logMFI']
     bort = \
         mfi[mfi.pert_type == 'trt_poscon'][cols].groupby(
             ['prism_replicate', 'ccle_name', 'pert_type']).median(numeric_only=True).reset_index()[
@@ -175,7 +175,8 @@ def construct_count_df(count, mfi):
     count['culture'] = count['cid'].str.split('_').str[1]
     count.loc[count.culture == 'PR300P', 'culture'] = 'PR300'
     count['rid'] = count['rid'] + '_' + count['culture']
-    res = count.merge(mfi[['profile_id', 'rid', 'prism_replicate', 'pool_id', 'pert_well', 'pert_plate', 'replicate','pert_type', 'ccle_name']],
+    res = count.merge(mfi[['profile_id', 'rid', 'prism_replicate', 'pool_id', 'pert_well', 'pert_plate', 'replicate',
+                           'pert_type', 'ccle_name']],
                       left_on=['rid', 'cid'],
                       right_on=['rid', 'profile_id'], how='left').dropna()
     res.rename(columns={'value': 'count'}, inplace=True)
@@ -200,13 +201,13 @@ def get_instances_removed(inst: pd.DataFrame, mfi: pd.DataFrame, cell: pd.DataFr
 
     # Cross join cell and inst on 'culture'
     expected_instances = cell.merge(inst[['pert_plate', 'pert_well', 'replicate', 'culture', 'prism_replicate']],
-                                   on='culture', how='outer')
+                                    on='culture', how='outer')
 
     # Merge and filter to get instances_removed
     instances_removed = mfi.merge(expected_instances,
-                                 on=['ccle_name', 'culture', 'pert_plate', 'pert_well', 'replicate', 'pool_id',
-                                     'prism_replicate'],
-                                 how='right')
+                                  on=['ccle_name', 'culture', 'pert_plate', 'pert_well', 'replicate', 'pool_id',
+                                      'prism_replicate'],
+                                  how='right')
 
     instances_removed = instances_removed[instances_removed.pert_id.isna()]
 
@@ -218,21 +219,24 @@ def get_instances_removed(inst: pd.DataFrame, mfi: pd.DataFrame, cell: pd.DataFr
 
     # Rename columns
     instances_removed.rename(columns={'pert_iname_y': 'pert_iname',
-                                     'pert_dose_y': 'pert_dose',
-                                     'pert_id_y': 'pert_id'}, inplace=True)
+                                      'pert_dose_y': 'pert_dose',
+                                      'pert_id_y': 'pert_id'}, inplace=True)
 
     return instances_removed
 
 
 def profiles_removed(df):
-    replicates_by_compound = df[~df.ccle_name.str.contains('invariant')].groupby(['culture','pert_plate','ccle_name','pert_iname','pert_dose']).size().reset_index(name='n_profiles')
+    replicates_by_compound = df[~df.ccle_name.str.contains('invariant')].groupby(
+        ['culture', 'pert_plate', 'ccle_name', 'pert_iname', 'pert_dose']).size().reset_index(name='n_profiles')
     res = replicates_by_compound[replicates_by_compound.n_profiles < 2].drop(columns=['n_profiles'])
     return res
+
 
 # Calculate analyte ranks within each group
 def calculate_ranks(group):
     group['rank'] = group['logMFI'].rank(method='first')
     return group
+
 
 # Compute pairwise correlations of CTLBC ranks for each plate
 def calculate_avg_spearman_correlation(df):
@@ -242,7 +246,7 @@ def calculate_avg_spearman_correlation(df):
 
     # Use a pivot table to rearrange data: rows as ccle_names, columns as wells, and cell values as ranks
     data_pivot = data.pivot_table(index=['prism_replicate', 'ccle_name'], columns='pert_well', values='rank')
-    
+
     # Prepare to store correlations
     correlations = {}
 
@@ -255,7 +259,7 @@ def calculate_avg_spearman_correlation(df):
 
         # Calculate Spearman correlation matrix
         corr_matrix = valid_data.corr(method='spearman')
-        
+
         # Extract the upper triangle of the correlation matrix without the diagonal
         upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
 
@@ -267,11 +271,12 @@ def calculate_avg_spearman_correlation(df):
             avg_corr = correlations_list.mean()
         else:
             avg_corr = np.nan
-        
+
         # Store the average correlation in the dictionary
         correlations[replicate] = avg_corr
 
     return correlations
+
 
 def annotate_pert_types(df):
     """
@@ -302,11 +307,11 @@ def median_plate_well(df, cols=['logMFI', 'logMFI_norm', 'count']):
                       'pert_plate', 'replicate', 'pert_well', and 'pert_type'.
     """
     # Ensure that only the necessary columns are included in the calculation to avoid errors
-    group_cols = ['prism_replicate', 'pert_plate', 'replicate', 'pert_well', 'pert_type']
+    group_cols = ['prism_replicate', 'pert_plate', 'replicate', 'pert_well', 'pert_type', 'culture']
     relevant_cols = group_cols + cols  # Combine grouping columns and columns for which to calculate median
     grouped_df = df[relevant_cols].groupby(group_cols)  # Group by specified columns
     median_df = grouped_df.median()  # Calculate the median for the grouped data
-    
+
     return median_df.reset_index()  # Reset index to turn grouped indices back into columns
 
 
@@ -347,8 +352,9 @@ def calculate_delta_lmfi_corr(df):
 
     # Create median by pool
     delta_LMFI_poolmedian = \
-    delta_LMFI.groupby(['prism_replicate', 'pool_id', 'pert_well', 'pert_iname', 'pert_dose', 'pert_type', 'cell_set'])[
-        'delta_LMFI'].median().reset_index(name='delta_LMFI_poolmedian')
+        delta_LMFI.groupby(
+            ['prism_replicate', 'pool_id', 'pert_well', 'pert_iname', 'pert_dose', 'pert_type', 'cell_set'])[
+            'delta_LMFI'].median().reset_index(name='delta_LMFI_poolmedian')
 
     # Annotate rows/cols
     delta_LMFI = annotate_col_row(delta_LMFI)
@@ -356,9 +362,10 @@ def calculate_delta_lmfi_corr(df):
 
     # Group delta_LMFI for replicate correlation
     delta_LMFI_grouped = delta_LMFI.groupby(['cell_set', 'pool_id', 'pert_well',
-                                          'pert_iname', 'pert_dose', 'pert_type', 'pert_plate'])
+                                             'pert_iname', 'pert_dose', 'pert_type', 'pert_plate'])
 
     corr_df = delta_LMFI_grouped.apply(calculate_correlation).reset_index(name='LMFInorm_corr')
-    corr_df = corr_df.merge(delta_LMFI_poolmedian, on=['pert_type','pert_well','pert_dose','pert_iname','cell_set','pool_id'])
+    corr_df = corr_df.merge(delta_LMFI_poolmedian,
+                            on=['pert_type', 'pert_well', 'pert_dose', 'pert_iname', 'cell_set', 'pool_id'])
 
     return delta_LMFI_poolmedian, corr_df
