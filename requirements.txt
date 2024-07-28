@@ -13,3 +13,6 @@ altair==4
 cmappy
 pymysql
 plotnine
+extra-streamlit-components
+aws-secretsmanager-caching
+pyjwt
