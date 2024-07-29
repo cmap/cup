@@ -33,7 +33,6 @@ st.set_page_config(layout='wide',page_title='PRISM QC')
 st.header("Login")
 # AWS/API setup
 API_URL = 'https://api.clue.io/api/'
-API_KEY = os.environ['API_KEY']
 
 BUILDS_URL = API_URL + 'data_build_types/prism-builds'
 # Your API url to get JWT token
@@ -52,6 +51,7 @@ def update_params():
 if st.session_state["email"] and st.session_state["init"] and st.session_state["init"]["api_key"]:
   # Write application content
   decoded = jwt.decode(st.session_state["init"]["api_key"], jwtTokenSecret,algorithms=["HS256"])
+  API_KEY = decoded['api_key']
 
   if decoded and decoded["roles"]:
       if 'ADMIN' in decoded["roles"] or 'PRISM_CORE' in decoded["roles"] or 'CMAP_CORE' in decoded["roles"]:
