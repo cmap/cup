@@ -2,24 +2,24 @@ import boto3
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import streamlit as st
 import numpy as np
-from scipy import stats
-from itertools import combinations
 import seaborn as sns
 import io
 import matplotlib.pyplot as plt
-import plotly.figure_factory as ff
-import plotly.subplots as sp
-import plotly.io as pio
 from matplotlib.colors import ListedColormap
 import df_transform
-import math
 from plotnine import *
-from scipy.stats import pearsonr
+import warnings
+from plotnine.exceptions import PlotnineWarning
 
+# Filter plotnine warnings
+warnings.filterwarnings('ignore', category=PlotnineWarning)
+
+# Set thresholds
 dr_threshold = -np.log2(0.3)
 er_threshold = 0.05
+delta_lmfi_threshold = -3
+corr_threshold = 0.6
 
 
 # DYNAMIC RANGE
@@ -37,6 +37,9 @@ def plot_dynamic_range(df, metric, build, filename, bucket_name='cup.clue.io'):
     s3 = boto3.client('s3')
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
+
+    # Close the plot
+    plt.close('all')
 
 
 def plot_dynamic_range_norm_raw(df, build, filename, bucket_name='cup.clue.io'):
@@ -65,6 +68,9 @@ def plot_dynamic_range_norm_raw(df, build, filename, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # PASS RATES
 def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
@@ -83,6 +89,9 @@ def plot_pass_rates_by_plate(df, build, filename, bucket_name='cup.clue.io'):
     json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 def plot_pass_rates_by_pool(df, culture, build):
     df['replicate'] = df['prism_replicate'].str.split('_').str[3]
@@ -93,7 +102,7 @@ def plot_pass_rates_by_pool(df, culture, build):
 
     # Set plot width and height based on number of plates
     width = n_pert_plates * 4
-    height = n_replicates * 3
+    height = 4
 
     # Ensure colors are correct
     colors = {False: 'red',
@@ -105,7 +114,7 @@ def plot_pass_rates_by_pool(df, culture, build):
             stat_count() +
             facet_grid('rep_number ~ pert_plate') +
             theme(axis_text_x=element_text(rotation=90)) +
-            theme(figure_size=(10, 6)) +
+            theme(figure_size=(10, 4)) +
             xlab('') +
             ylab('') +
             scale_fill_manual(values=colors) +
@@ -121,6 +130,9 @@ def plot_pass_rates_by_pool(df, culture, build):
     s3 = boto3.client('s3')
     object_key = f"{build}/{culture}_pass_by_pool.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close the plot
+    plt.close('all')
 
 
 # DISTRIBUTIONS
@@ -155,6 +167,9 @@ def plot_distributions_by_plate(df, build, filename, culture, pert_types=['trt_p
     s3 = boto3.client('s3')
     full_filename = f"{culture}_{filename}"
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{full_filename}")
+
+    # Close the plot
+    plt.close('all')
 
 
 # BANANA PLOTS
@@ -193,6 +208,9 @@ def plot_banana_plots(df, x, y, filename, build, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # LIVER PLOTS
 
@@ -221,6 +239,9 @@ def plot_liver_plots(df, build, filename, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # ERROR RATE V SSMD
 
@@ -248,6 +269,9 @@ def plot_dr_error_rate(df, build, filename, bucket_name='cup.clue.io'):
     fig_json = g.to_json()
     s3.put_object(Bucket=bucket_name, Key=f"{build}/{filename}", Body=fig_json.encode('utf-8'))
 
+    # Close the plot
+    plt.close('all')
+
 
 # REPLICATE CORRELATION
 
@@ -262,6 +286,9 @@ def corrdot(*args, **kwargs):
     font_size = abs(corr_r) * 40 + 5
     ax.annotate(corr_text, [.5, .5, ], xycoords="axes fraction",
                 ha='center', va='center', fontsize=font_size)
+
+    # Close the plot
+    plt.close('all')
 
 
 def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_name='cup.clue.io'):
@@ -290,6 +317,9 @@ def make_corrplots(df, pert_plate, build, culture, metric='logMFI_norm', bucket_
     s3 = boto3.client('s3')
     filename = f"{pert_plate}:{culture}_corrplot.png"
     s3.upload_fileobj(buffer, bucket_name, f"{build}/{filename}")
+
+    # Close plot
+    plt.close('all')
 
 
 def plot_plate_heatmaps(df, metric, build, culture, vmax=4, vmin=16, by_type=True):
@@ -370,6 +400,9 @@ def plot_plate_heatmaps(df, metric, build, culture, vmax=4, vmin=16, by_type=Tru
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
 
 def make_pert_type_heatmaps(df, build, vmax, vmin, metric='logMFI'):
     for culture in df.culture.unique():
@@ -441,6 +474,9 @@ def make_pert_type_heatmaps(df, build, vmax, vmin, metric='logMFI'):
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
 
 def make_build_count_heatmaps(df, build, metric='count'):
     for culture in df.culture.unique():
@@ -504,6 +540,9 @@ def make_build_count_heatmaps(df, build, metric='count'):
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
 
 def generate_cbc_quantile_plot(df, build, culture):
     # Filter and get unique values
@@ -564,6 +603,9 @@ def generate_cbc_quantile_plot(df, build, culture):
 
     s3 = boto3.client('s3')
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close plot
+    plt.close('all')
 
 
 def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
@@ -628,6 +670,9 @@ def make_build_mfi_heatmaps(df, build, vmax, vmin, metric='logMFI'):
         s3 = boto3.client('s3')
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close plot
+        plt.close('all')
+
 
 def make_control_violin_plot(df, build, culture):
     # Subset data
@@ -658,6 +703,9 @@ def make_control_violin_plot(df, build, culture):
     img_data = io.BytesIO()
     g.save(img_data, format='png', width=fig_width, height=fig_height, dpi=100)
     img_data.seek(0)
+
+    # Close the plot
+    plt.close('all')
 
     # Upload to S3
     s3 = boto3.client('s3')
@@ -710,6 +758,9 @@ def make_ctlbc_rank_heatmaps(df, build, culture):
     object_key = f"{build}/{culture}_ctlbc_rank_heatmap.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+    # Close the plot
+    plt.close('all')
+
 
 def make_ctlbc_rank_violin(df, build, culture, corrs):
     # Subset data and add row/col
@@ -750,6 +801,9 @@ def make_ctlbc_rank_violin(df, build, culture, corrs):
     s3 = boto3.client('s3')
     object_key = f"{build}/{culture}_ctlbc_rank_violin.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close the plot
+    plt.close('all')
 
 
 def make_control_norm_plots(mfi, qc, culture, build):
@@ -795,10 +849,15 @@ def make_control_norm_plots(mfi, qc, culture, build):
         object_key = f"{build}/{culture}_{pert}_norm.png"
         s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
 
+        # Close the plot
+        plt.close('all')
+
 
 def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, limits=None,
                   fig_size=(8, 3), title='', text_size=5, annotation='pert_type_annotation', tick_size=5,
                   text_color='white'):
+    # Filter data
+    df = df[df.culture == culture]
     # Add column/row labels and properly order
     df['row'] = df['pert_well'].str[0]
     df['col'] = df['pert_well'].str[1:3]
@@ -922,3 +981,127 @@ def heatmap_plate(df, metric, build, culture, facet_method=None, facets=None, li
     s3 = boto3.client('s3')
     object_key = f"{build}/{metric}_{culture}_heatmaps.png"
     s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+    # Close the plot
+    plt.close('all')
+
+
+def plot_delta_lmfi_heatmaps(df, build):
+    for plate in df.prism_replicate.unique():
+        g = (
+                ggplot(df[(df.prism_replicate == plate) & (df.pool_id != 'CTLBC')],
+                       aes(x='col', y='row', fill='abs(delta_LMFI_poolmedian)')) +
+                geom_tile() +  # Use geom_tile for heatmap-like visualization
+                scale_fill_gradient(low="dodgerblue", high="red") +  # Gradient fill based on the absolute values
+                facet_wrap('pool_id', ncol=5) +  # Facet by pool_id
+                theme_minimal() +
+                theme(
+                    axis_text_x=element_text(size=2),  # Smaller text size for x-axis ticks
+                    axis_text_y=element_text(size=3)  # Smaller text size for y-axis ticks
+                ) +
+                labs(x="", y="", fill="|Delta LMFI|")  # Labels for axes and legend
+        )
+
+        # Save plot to a BytesIO object as PNG
+        img_data = io.BytesIO()
+        g.save(img_data, format='png', dpi=150)
+        img_data.seek(0)
+
+        # Upload to S3
+        s3 = boto3.client('s3')
+        object_key = f"{build}/{plate}_deltaLMFI_heatmaps.png"
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+        # Close the plot
+        plt.close('all')
+
+
+def plot_pool_correlations_heatmaps(df, build):
+    data = df[(df.pool_id != 'CTLBC')].dropna()
+    data['LMFInorm_corr'] = data['LMFInorm_corr'].astype('float')
+
+    for plate in data.prism_replicate.unique():
+        plot_data = data[data.prism_replicate == plate]
+        g = (
+                ggplot(plot_data, aes(x='col', y='row', fill='LMFInorm_corr')) +
+                geom_tile() +
+                facet_wrap('pool_id') +
+                theme_minimal() +
+                theme(
+                    axis_text_x=element_text(size=2),  # Smaller text size for x-axis ticks
+                    axis_text_y=element_text(size=3)  # Smaller text size for y-axis ticks
+                ) +
+                scale_fill_gradient(low='red', high='dodgerblue') +
+                labs(x="", y="", fill="Correlation")
+        )
+
+        # Save plot to a BytesIO object as PNG
+        img_data = io.BytesIO()
+        g.save(img_data, format='png', dpi=150)
+        img_data.seek(0)
+
+        # Upload to S3
+        s3 = boto3.client('s3')
+        object_key = f"{build}/{plate}_pool_correlation_heatmaps.png"
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+        # Close the plot
+        plt.close('all')
+
+
+def plot_delta_lmfi_histograms(df, build, delta_lmfi_threshold_plot=delta_lmfi_threshold):
+    for plate in df.prism_replicate.unique():
+        g = (
+                ggplot(df[(df.prism_replicate == plate) & (df.pool_id != 'CTLBC')], aes(x='delta_LMFI_poolmedian')) +
+                geom_histogram(bins=50) +
+                facet_wrap('pool_id') +
+                scale_y_log10() +
+                geom_vline(xintercept=delta_lmfi_threshold_plot, color='red', linetype='--') +
+                geom_vline(xintercept=abs(delta_lmfi_threshold_plot), color='red', linetype='--') +
+                theme_seaborn() +
+                theme(figure_size=(10, 7)) +
+                ylab('')
+        )
+
+        # Save plot to a BytesIO object as PNG
+        img_data = io.BytesIO()
+        g.save(img_data, format='png', dpi=150)
+        img_data.seek(0)
+
+        # Upload to S3
+        s3 = boto3.client('s3')
+        object_key = f"{build}/{plate}_deltaLMFI_histograms.png"
+        s3.upload_fileobj(img_data, 'cup.clue.io', object_key)
+
+        # Close the plot
+        plt.close('all')
+
+
+def plot_pool_correlation_histograms(df, build, corr_threshold_plot=corr_threshold):
+    for plate in df.prism_replicate.unique():
+        data = df[(df.prism_replicate == plate) & (df.pool_id != 'CTLBC')]
+        # Distribution of correlations
+        sns.set_theme()
+        g = sns.FacetGrid(data=data.dropna(), col='pool_id', col_wrap=5, aspect=1.25, height=4)
+        g.set_titles('{col_name}')
+        g.set_axis_labels("Correlation", "")
+        g.map(sns.histplot, 'LMFInorm_corr', bins=50)
+        for ax in g.axes.flat:
+            ax.axvline(x=corr_threshold_plot, color='red', linestyle='--', linewidth=1.5)
+            ax.set_yscale('log')
+            ax.set_xlabel('')  # Remove x-axis label
+            ax.set_ylabel('')  # Remove y-axis label
+
+        g.fig.text(0.5, 0.02, 'LMFInorm Correlation', ha='center')
+
+        # Save plot as PNG to buffer
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+
+        # Upload as PNG to S3
+        s3 = boto3.client('s3')
+        s3.upload_fileobj(buffer, 'cup.clue.io', f"{build}/{plate}_pool_correlation_histograms.png")
+
+        # Close the plot
+        plt.close('all')

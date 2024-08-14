@@ -27,11 +27,13 @@ ctl_quantiles = 'These line plots are intended to give us an idea of how evenly 
                 'quantile of all cell line barcodes that the given median control barcode falls into. Note that this ' \
                 'is limited to vehicle wells. The ideal distribution is signified by the dashed line on the plot.'
 
-dr_and_er = 'Dynamic range and error rate are the two key QC metrics that we use when determining whether or not a ' \
+dr_and_er = 'Dynamic range, error rate and floor range are the two key QC metrics that we use when determining whether or not a ' \
             'cell line passes or fails on a given detection plate. **Dynamic range** is given by the difference ' \
             'between the logMFI of the vehicle control and the positive control. The **error rate** is a measure of the ' \
             'overlap between the positive and negative control values for each cell line and is given as **ER = (FP - FN)/n** ' \
-            'where FP is the false positive rate, FN is the false negative rate, and n is the total number of controls.'
+            'where FP is the false positive rate, FN is the false negative rate, and n is the total number of controls./n** ' \
+            '**Floor range** is defined as the difference between the signal from a cell line in vehicle and a bead that ' \
+            'has been coupled to a sequence that lacks any matching sequence.'
 
 pass_by_plate = 'Fractions of cell lines within each detection plate that pass our thresholds for both dynamic range ' \
                 'and error rate.'
@@ -91,3 +93,9 @@ norm_impact = 'These plots show the relationship between pre and post-normalizat
        'Generally speaking, we expect to see that normalization leads to lower signal in our poscon and largely similar signal ' \
               'in our vehicle control. When we deviate from these expectations, we tend to see higher numbers of  failures. ' \
                      'The number in each plot represents the fraction of cell lines that pass in that detection plate.'
+
+deltaLMFI = 'In order to identify treatment plate issues,  for each treatment condition (a single perturbagen at a ' \
+            'single dose) we assess the similarity of our replicates in 2 ways. For each cell line, we calculate the ' \
+            'difference in log2(MFI) values between a single replicate and the median of all the replicates, ' \
+            'then take the median value of that difference for each pool. For each pool we also compute the pairwise ' \
+            'correlations between the median log2(MFI) value and the sample log2(MFI) value.'
