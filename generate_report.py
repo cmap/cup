@@ -4,22 +4,15 @@ import read_build
 import df_transform
 import io_functions
 from metadata import prism_metadata
-import argparse
 import s3fs
-import os
+import streamlit as st
 
 
-def main():
+def generate_report(build, api_key):
     # AWS/API setup
     API_URL = 'https://api.clue.io/api/'
-    API_KEY = os.environ['API_KEY']
+    API_KEY = api_key
     SCANNER_URL = API_URL + 'lims_plate'
-
-    # Argument parser
-    parser = argparse.ArgumentParser(description="Process some integers.")
-    parser.add_argument('-b', '--build', type=str, required=True, help='The build for which to generate report')
-    args = parser.parse_args()
-    build = args.build
 
     # S3FS setup
     fs = s3fs.S3FileSystem(anon=False)
@@ -28,7 +21,7 @@ def main():
     # Check if build exists
     build_path = "s3://macchiato.clue.io/builds/" + build + "/build/"
     if fs.exists(build_path):
-        print(f"Generating build for {build}.....")
+        print(f"Generating report for {build}.....")
 
         file_list = fs.ls(build_path)
         qc_file = f"s3://{io_functions.get_file(file_list, 'QC_TABLE')}"
@@ -46,7 +39,6 @@ def main():
         df_build = read_build.read_build_from_s3(build, data_levels=['qc', 'mfi', 'lfc', 'inst', 'cell'])
         qc = df_build.qc
         mfi = df_build.mfi
-        lfc = df_build.lfc
         inst = df_build.inst
         cell = df_build.cell
         df_well = df_transform.annotate_pert_types(df_transform.median_plate_well(mfi))
@@ -375,7 +367,3 @@ def main():
 
     else:
         print(f"Build {build} does not exist; check S3.")
-
-
-if __name__ == '__main__':
-    main()
